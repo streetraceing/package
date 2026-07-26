@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Package, compare, and safely apply project source archives from the command line.",
   "type": "module",
+  "lint-staged": {
+    "**/*": "prettier --write --ignore-unknown"
+  },
   "bin": {
     "package": "./dist/bin/package.js"
   },
@@ -25,7 +28,7 @@
     "check": "npm run typecheck && npm test && npm run build",
     "pack:check": "npm pack --dry-run",
     "prepublishOnly": "npm run check && npm run pack:check",
-    "prepare": "npm run build",
+    "prepare": "husky",
     "npm:patch": "npm version patch",
     "npm:minor": "npm version minor",
     "npm:major": "npm version major",
@@ -46,6 +49,8 @@
   ],
   "devDependencies": {
     "@types/node": "^22.15.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.2.0",
     "prettier": "3.9.6",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
