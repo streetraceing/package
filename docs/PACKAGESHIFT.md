@@ -69,6 +69,8 @@ Validate an archive and parse its shift file without changing the project:
 package check update.zip
 ```
 
+A manually created archive may contain `.packageshift` without `.packagemanifest.json`. In that case the CLI validates the ZIP payload and PackageShift syntax, generates temporary file metadata in memory, and reports that embedded manifest/base verification is unavailable. Legacy JSON metadata stored as `.packagemanifest` is also supported.
+
 Preview the complete application plan:
 
 ```bash

@@ -4,7 +4,7 @@ title: @streetraceing/package
 
 # @streetraceing/package
 
-A command-line tool for packaging, comparing, and safely applying project source archives.
+A command-line tool for packaging, comparing, and safely applying project source archives, including manifestless `.packageshift` update ZIPs.
 
 `.packagerc` is a strict JSON configuration file with schema support.
 

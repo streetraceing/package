@@ -68,7 +68,7 @@ In CI or another non-interactive shell, pass `--yes`:
 package apply update.zip --yes
 ```
 
-Before writing, `apply` validates paths, archive integrity, the base project hash, expected file hashes, and symbolic-link boundaries. By default it creates a backup in `.package-backups/` and rolls back partial changes when an operation fails.
+Before writing, `apply` validates paths, archive integrity, expected file hashes, and symbolic-link boundaries. Archives created by `package zip` or `package shift` also include a manifest for payload and base-project verification. By default `apply` creates a backup in `.package-backups/` and rolls back partial changes when an operation fails.
 
 ## Commands
 
@@ -197,6 +197,16 @@ update.zip
 ├── .packagemanifest.json
 └── .packageshift
 ```
+
+Manually created PackageShift archives may omit the manifest:
+
+```text
+manual-update.zip
+├── changed/files/...
+└── .packageshift
+```
+
+`check`, `inspect`, `list`, `diff`, and `apply` accept this form. The CLI generates temporary payload metadata from the ZIP entries and validates ZIP CRCs plus the `.packageshift` syntax. Because there is no embedded manifest, base-project verification is unavailable and `diff`/`apply` print a warning. The legacy JSON path `.packagemanifest` is also accepted when present.
 
 Exact renames are detected by matching SHA-256 hashes. Ambiguous fuzzy renames are not applied automatically.
 

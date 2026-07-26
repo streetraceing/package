@@ -14,6 +14,13 @@ export async function applyCommand(
   const comparison = await comparePackageToProject(pkg, options.cwd);
   console.log(`Package: ${resolvedArchive}`);
   console.log(`Target:  ${path.resolve(options.cwd)}`);
+  if (pkg.manifestSource === 'generated') {
+    console.log(
+      'Warning: archive has no embedded manifest; applying ZIP-verified payload and PackageShift instructions without base verification.',
+    );
+  } else if (pkg.manifestSource === 'legacy') {
+    console.log('Manifest: legacy .packagemanifest');
+  }
   console.log('');
   console.log(formatChanges(comparison.changes));
   console.log('');

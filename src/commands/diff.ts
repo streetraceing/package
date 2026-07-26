@@ -55,6 +55,7 @@ export async function diffCommand(
           archive: resolvedArchive,
           target: path.resolve(cwd),
           kind: pkg.manifest.kind,
+          manifestSource: pkg.manifestSource,
           baseMatches: result.baseMatches,
           changes: visible,
         },
@@ -66,6 +67,11 @@ export async function diffCommand(
     console.log(`Package: ${resolvedArchive}`);
     console.log(`Target:  ${path.resolve(cwd)}`);
     console.log(`Kind:    ${pkg.manifest.kind}`);
+    console.log(`Manifest: ${pkg.manifestSource}`);
+    if (pkg.manifestSource === 'generated')
+      console.log(
+        'Safety:  no embedded manifest; base verification unavailable',
+      );
     if (result.baseMatches === false)
       console.log('Base:    mismatch (apply requires --force)');
     else if (result.baseMatches === true) console.log('Base:    matches');

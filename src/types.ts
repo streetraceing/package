@@ -115,9 +115,12 @@ export interface ReadArchiveEntry {
   isDirectory: boolean;
 }
 
+export type ManifestSource = 'embedded' | 'legacy' | 'generated';
+
 export interface LoadedPackage {
   archivePath: string;
   manifest: PackageManifest;
+  manifestSource: ManifestSource;
   shift?: ParsedShift;
   entries: Map<string, ReadArchiveEntry>;
 }

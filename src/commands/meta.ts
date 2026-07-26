@@ -21,7 +21,11 @@ export async function inspectCommand(
   if (json) {
     console.log(
       JSON.stringify(
-        { manifest: pkg.manifest, structuralOperations: operations },
+        {
+          manifest: pkg.manifest,
+          manifestSource: pkg.manifestSource,
+          structuralOperations: operations,
+        },
         null,
         2,
       ),
@@ -30,6 +34,7 @@ export async function inspectCommand(
   }
   console.log(`Archive: ${path.resolve(cwd, archivePath)}`);
   console.log(`Kind: ${pkg.manifest.kind}`);
+  console.log(`Manifest: ${pkg.manifestSource}`);
   console.log(`Project: ${pkg.manifest.project}`);
   console.log(`Created: ${pkg.manifest.createdAt}`);
   console.log(`Files: ${pkg.manifest.files.length}`);
@@ -45,11 +50,25 @@ export async function checkCommand(
 ): Promise<void> {
   const pkg = await loadPackage(path.resolve(cwd, archivePath));
   console.log(`OK ${path.resolve(cwd, archivePath)}`);
-  console.log(`${pkg.manifest.files.length} payload files verified`);
-  if (pkg.shift)
+  const fileWord = pkg.manifest.files.length === 1 ? 'file' : 'files';
+  if (pkg.manifestSource === 'generated') {
     console.log(
-      `${pkg.shift.instructions.length} PackageShift instructions parsed`,
+      `No manifest found; validated as a PackageShift archive with ${pkg.manifest.files.length} payload ${fileWord}.`,
     );
+  } else if (pkg.manifestSource === 'legacy') {
+    console.log(
+      `${pkg.manifest.files.length} payload ${fileWord} verified using legacy .packagemanifest metadata`,
+    );
+  } else {
+    console.log(`${pkg.manifest.files.length} payload ${fileWord} verified`);
+  }
+  if (pkg.shift) {
+    const instructionWord =
+      pkg.shift.instructions.length === 1 ? 'instruction' : 'instructions';
+    console.log(
+      `${pkg.shift.instructions.length} PackageShift ${instructionWord} parsed`,
+    );
+  }
 }
 
 export async function listCommand(

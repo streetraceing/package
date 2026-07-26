@@ -19,6 +19,9 @@ import { createShiftArchive } from '../src/commands/shift.js';
 import { loadPackage } from '../src/manifest/load.js';
 import { comparePackageToProject } from '../src/commands/compare.js';
 import { applyPackage } from '../src/apply/transaction.js';
+import { writeZip } from '../src/archive/zip.js';
+import { sha256Buffer, stableJson } from '../src/util/hash.js';
+import type { ManifestFile, PackageManifest } from '../src/types.js';
 
 async function write(
   root: string,
@@ -194,6 +197,121 @@ test('snapshot validates .packageshift before writing the archive', async () => 
       ),
       /first instruction must declare the format version/i,
     );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test('accepts a manifestless PackageShift archive for check, diff, and apply', async () => {
+  const workspace = await mkdtemp(path.join(tmpdir(), 'package-manifestless-'));
+  const target = path.join(workspace, 'target-project');
+  const archivePath = path.join(workspace, 'update.zip');
+  try {
+    await mkdir(target, { recursive: true });
+    await write(target, 'src/remove.ts', 'remove me\n');
+    await write(target, 'src/keep.ts', 'old\n');
+
+    await writeZip(
+      archivePath,
+      [
+        {
+          path: 'src/keep.ts',
+          data: Buffer.from('new\n', 'utf8'),
+          mode: 0o644,
+        },
+        {
+          path: '.packageshift',
+          data: Buffer.from(
+            'PACKAGESHIFT 1\n\nREMOVE "src/remove.ts"\n',
+            'utf8',
+          ),
+          mode: 0o644,
+        },
+      ],
+      { compressionLevel: 9, deterministic: true },
+    );
+
+    const pkg = await loadPackage(archivePath);
+    assert.equal(pkg.manifestSource, 'generated');
+    assert.equal(pkg.manifest.kind, 'patch');
+    assert.deepEqual(
+      pkg.manifest.files.map((file) => file.path),
+      ['src/keep.ts'],
+    );
+    assert.equal(pkg.shift?.instructions[0]?.type, 'REMOVE');
+
+    const before = await comparePackageToProject(pkg, target);
+    assert.ok(before.changes.some((change) => change.kind === 'MODIFY'));
+    assert.ok(before.changes.some((change) => change.kind === 'REMOVE'));
+
+    await applyPackage(pkg, {
+      cwd: target,
+      dryRun: false,
+      yes: true,
+      force: false,
+      backup: false,
+      conflictStrategy: 'abort',
+    });
+
+    assert.equal(
+      await readFile(path.join(target, 'src/keep.ts'), 'utf8'),
+      'new\n',
+    );
+    await assert.rejects(
+      readFile(path.join(target, 'src/remove.ts')),
+      /ENOENT/,
+    );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test('accepts legacy .packagemanifest metadata', async () => {
+  const workspace = await mkdtemp(
+    path.join(tmpdir(), 'package-legacy-manifest-'),
+  );
+  const archivePath = path.join(workspace, 'legacy.zip');
+  try {
+    const data = Buffer.from('legacy payload\n', 'utf8');
+    const files: ManifestFile[] = [
+      {
+        path: 'src/index.ts',
+        size: data.length,
+        mode: 0o644,
+        sha256: sha256Buffer(data),
+      },
+    ];
+    const manifest: PackageManifest = {
+      schemaVersion: 1,
+      kind: 'patch',
+      project: 'legacy',
+      createdAt: new Date(0).toISOString(),
+      rootHash: sha256Buffer(Buffer.from(stableJson(files), 'utf8')),
+      config: {
+        strategy: 'walk',
+        gitignore: false,
+        npmignore: false,
+        dot: true,
+      },
+      files,
+    };
+
+    await writeZip(
+      archivePath,
+      [
+        { path: 'src/index.ts', data, mode: 0o644 },
+        {
+          path: '.packagemanifest',
+          data: Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, 'utf8'),
+          mode: 0o644,
+        },
+      ],
+      { compressionLevel: 9, deterministic: true },
+    );
+
+    const pkg = await loadPackage(archivePath);
+    assert.equal(pkg.manifestSource, 'legacy');
+    assert.equal(pkg.manifest.files[0]?.path, 'src/index.ts');
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }
