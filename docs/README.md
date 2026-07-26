@@ -19,6 +19,13 @@ Create a project snapshot:
 npx @streetraceing/package zip
 ```
 
+To use the `package` command directly, install it globally:
+
+```bash
+npm install --global @streetraceing/package
+package zip
+```
+
 After changing the project, create an update package from that snapshot and
 preview it before writing anything:
 

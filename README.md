@@ -25,6 +25,13 @@ Run the CLI without a global installation:
 npx @streetraceing/package zip
 ```
 
+Or install it globally to use the `package` command directly:
+
+```bash
+npm install --global @streetraceing/package
+package zip
+```
+
 Create a snapshot, generate an update from it after changing the project, then
 inspect or apply that update:
 
