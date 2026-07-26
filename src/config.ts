@@ -55,7 +55,11 @@ function stripJsonComments(input: string): string {
     }
     if (char === '/' && next === '*') {
       index += 2;
-      while (index < input.length && !(input[index] === '*' && input[index + 1] === '/')) index += 1;
+      while (
+        index < input.length &&
+        !(input[index] === '*' && input[index + 1] === '/')
+      )
+        index += 1;
       index += 1;
       continue;
     }
@@ -70,43 +74,70 @@ function parseLooseJson(input: string, sourceName: string): unknown {
   } catch {
     try {
       const withoutComments = stripJsonComments(input)
-        .replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_match, content: string) => JSON.stringify(content.replace(/\\'/g, "'")))
+        .replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_match, content: string) =>
+          JSON.stringify(content.replace(/\\'/g, "'")),
+        )
         .replace(/([{,]\s*)([A-Za-z_$][\w$-]*)(\s*:)/g, '$1"$2"$3')
         .replace(/,\s*([}\]])/g, '$1');
       return JSON.parse(withoutComments);
     } catch (error) {
-      throw new PackageError(`Cannot parse ${sourceName}: ${(error as Error).message}`, 'CONFIG_PARSE_ERROR');
+      throw new PackageError(
+        `Cannot parse ${sourceName}: ${(error as Error).message}`,
+        'CONFIG_PARSE_ERROR',
+      );
     }
   }
 }
 
-function validateConfig(value: unknown, sourceName: string): Partial<PackageConfig> {
+function validateConfig(
+  value: unknown,
+  sourceName: string,
+): Partial<PackageConfig> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new PackageError(`${sourceName} must contain an object.`, 'CONFIG_INVALID');
+    throw new PackageError(
+      `${sourceName} must contain an object.`,
+      'CONFIG_INVALID',
+    );
   }
   const config = value as Record<string, unknown>;
   const arrayKeys = ['include', 'ignore'] as const;
   for (const key of arrayKeys) {
-    if (config[key] !== undefined && (!Array.isArray(config[key]) || !(config[key] as unknown[]).every((item) => typeof item === 'string'))) {
-      throw new PackageError(`${sourceName}: ${key} must be an array of strings.`, 'CONFIG_INVALID');
+    if (
+      config[key] !== undefined &&
+      (!Array.isArray(config[key]) ||
+        !(config[key] as unknown[]).every((item) => typeof item === 'string'))
+    ) {
+      throw new PackageError(
+        `${sourceName}: ${key} must be an array of strings.`,
+        'CONFIG_INVALID',
+      );
     }
   }
   if (config.compressionLevel !== undefined) {
     const level = Number(config.compressionLevel);
     if (!Number.isInteger(level) || level < 0 || level > 9) {
-      throw new PackageError(`${sourceName}: compressionLevel must be an integer from 0 to 9.`, 'CONFIG_INVALID');
+      throw new PackageError(
+        `${sourceName}: compressionLevel must be an integer from 0 to 9.`,
+        'CONFIG_INVALID',
+      );
     }
   }
   if (config.renameThreshold !== undefined) {
     const threshold = Number(config.renameThreshold);
     if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
-      throw new PackageError(`${sourceName}: renameThreshold must be between 0 and 1.`, 'CONFIG_INVALID');
+      throw new PackageError(
+        `${sourceName}: renameThreshold must be between 0 and 1.`,
+        'CONFIG_INVALID',
+      );
     }
   }
   return config as Partial<PackageConfig>;
 }
 
-export async function loadConfig(cwd: string, explicitPath?: string): Promise<{ config: PackageConfig; configPath?: string }> {
+export async function loadConfig(
+  cwd: string,
+  explicitPath?: string,
+): Promise<{ config: PackageConfig; configPath?: string }> {
   const candidates = explicitPath
     ? [path.resolve(cwd, explicitPath)]
     : [path.join(cwd, '.packagerc'), path.join(cwd, '.packagerc.json')];
@@ -123,7 +154,10 @@ export async function loadConfig(cwd: string, explicitPath?: string): Promise<{ 
   return { config: { ...defaultConfig } };
 }
 
-export function resolveConfigPaths(config: PackageConfig, cwd: string): PackageConfig {
+export function resolveConfigPaths(
+  config: PackageConfig,
+  cwd: string,
+): PackageConfig {
   const root = path.resolve(cwd, config.root);
   const output = path.resolve(root, config.output);
   return { ...config, root, output };

@@ -19,7 +19,10 @@ function decodeEscape(char: string): string {
   return char;
 }
 
-export function tokenizeShift(source: string, sourceName = '.packageshift'): ShiftToken[][] {
+export function tokenizeShift(
+  source: string,
+  sourceName = '.packageshift',
+): ShiftToken[][] {
   const output: ShiftToken[][] = [];
   const lines = source.split(/\r?\n/);
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
@@ -56,17 +59,41 @@ export function tokenizeShift(source: string, sourceName = '.packageshift'): Shi
           index += 1;
         }
         if (!closed) {
-          throw new ShiftSyntaxError(sourceName, lineIndex + 1, column, sourceLine, 'Unterminated quoted string.', 'Close the string with a double quote.', 'PS1002');
+          throw new ShiftSyntaxError(
+            sourceName,
+            lineIndex + 1,
+            column,
+            sourceLine,
+            'Unterminated quoted string.',
+            'Close the string with a double quote.',
+            'PS1002',
+          );
         }
-        tokens.push({ type: 'STRING', value, line: lineIndex + 1, column, sourceLine });
+        tokens.push({
+          type: 'STRING',
+          value,
+          line: lineIndex + 1,
+          column,
+          sourceLine,
+        });
         continue;
       }
       let value = '';
-      while (index < sourceLine.length && !/\s/.test(sourceLine[index] ?? '') && sourceLine[index] !== '#') {
+      while (
+        index < sourceLine.length &&
+        !/\s/.test(sourceLine[index] ?? '') &&
+        sourceLine[index] !== '#'
+      ) {
         value += sourceLine[index] ?? '';
         index += 1;
       }
-      tokens.push({ type: 'WORD', value, line: lineIndex + 1, column, sourceLine });
+      tokens.push({
+        type: 'WORD',
+        value,
+        line: lineIndex + 1,
+        column,
+        sourceLine,
+      });
     }
     if (tokens.length > 0) output.push(tokens);
   }

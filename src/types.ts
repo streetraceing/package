@@ -61,7 +61,13 @@ export type ShiftInstruction =
   | { type: 'MESSAGE'; value: string; line: number }
   | { type: 'BASE'; hash: string; line: number }
   | { type: 'REMOVE'; path: string; expectedHash?: string; line: number }
-  | { type: 'MOVE'; from: string; to: string; expectedHash?: string; line: number }
+  | {
+      type: 'MOVE';
+      from: string;
+      to: string;
+      expectedHash?: string;
+      line: number;
+    }
   | { type: 'COPY'; from: string; to: string; line: number }
   | { type: 'REPLACE'; path: string; expectedHash?: string; line: number }
   | { type: 'CHMOD'; path: string; mode: number; line: number };
@@ -71,7 +77,15 @@ export interface ParsedShift {
   instructions: ShiftInstruction[];
 }
 
-export type ChangeKind = 'ADD' | 'MODIFY' | 'REMOVE' | 'MOVE' | 'COPY' | 'MODE' | 'UNCHANGED' | 'CONFLICT';
+export type ChangeKind =
+  | 'ADD'
+  | 'MODIFY'
+  | 'REMOVE'
+  | 'MOVE'
+  | 'COPY'
+  | 'MODE'
+  | 'UNCHANGED'
+  | 'CONFLICT';
 
 export interface ProjectChange {
   kind: ChangeKind;

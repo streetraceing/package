@@ -5,7 +5,10 @@ import { applyPackage } from '../apply/transaction.js';
 import { comparePackageToProject } from './compare.js';
 import { formatChanges } from './diff.js';
 
-export async function applyCommand(archivePath: string, options: ApplyOptions): Promise<void> {
+export async function applyCommand(
+  archivePath: string,
+  options: ApplyOptions,
+): Promise<void> {
   const resolvedArchive = path.resolve(options.cwd, archivePath);
   const pkg = await loadPackage(resolvedArchive);
   const comparison = await comparePackageToProject(pkg, options.cwd);
@@ -16,7 +19,9 @@ export async function applyCommand(archivePath: string, options: ApplyOptions): 
   console.log('');
   const result = await applyPackage(pkg, options);
   if (options.dryRun) {
-    console.log(`Dry run complete. ${result.changedPaths} paths may be changed.`);
+    console.log(
+      `Dry run complete. ${result.changedPaths} paths may be changed.`,
+    );
   } else {
     console.log(`Applied ${result.changedPaths} paths.`);
     if (result.backupPath) console.log(`Backup: ${result.backupPath}`);

@@ -52,7 +52,9 @@ export function matchesGlob(relativePath: string, pattern: string): boolean {
   const regex = globToRegex(normalizedPattern);
   if (regex.test(target)) return true;
   if (!normalizedPattern.includes('/')) {
-    return target.split('/').some((segment) => globToRegex(normalizedPattern).test(segment));
+    return target
+      .split('/')
+      .some((segment) => globToRegex(normalizedPattern).test(segment));
   }
   return false;
 }
@@ -71,23 +73,44 @@ export function parseIgnoreFile(content: string, base = ''): IgnoreRule[] {
     const directoryOnly = line.endsWith('/');
     line = line.replace(/\/$/, '').replace(/^\//, '');
     if (!line) continue;
-    rules.push({ base: toPosixPath(base), pattern: line, negated, directoryOnly });
+    rules.push({
+      base: toPosixPath(base),
+      pattern: line,
+      negated,
+      directoryOnly,
+    });
   }
   return rules;
 }
 
-export function isIgnored(relativePath: string, isDirectory: boolean, rules: IgnoreRule[]): boolean {
+export function isIgnored(
+  relativePath: string,
+  isDirectory: boolean,
+  rules: IgnoreRule[],
+): boolean {
   const target = toPosixPath(relativePath).replace(/^\.\//, '');
   let ignored = false;
   for (const rule of rules) {
-    const relativeToBase = rule.base ? path.posix.relative(rule.base, target) : target;
+    const relativeToBase = rule.base
+      ? path.posix.relative(rule.base, target)
+      : target;
     if (relativeToBase.startsWith('../') || relativeToBase === '..') continue;
-    const pattern = rule.pattern.includes('/') ? rule.pattern : `**/${rule.pattern}`;
+    const pattern = rule.pattern.includes('/')
+      ? rule.pattern
+      : `**/${rule.pattern}`;
     const directPattern = rule.pattern;
-    const matched = matchesGlob(relativeToBase, directPattern)
-      || matchesGlob(relativeToBase, pattern)
-      || (rule.directoryOnly && (relativeToBase === rule.pattern || relativeToBase.startsWith(`${rule.pattern}/`)));
-    if (matched && (!rule.directoryOnly || isDirectory || relativeToBase.startsWith(`${rule.pattern}/`))) {
+    const matched =
+      matchesGlob(relativeToBase, directPattern) ||
+      matchesGlob(relativeToBase, pattern) ||
+      (rule.directoryOnly &&
+        (relativeToBase === rule.pattern ||
+          relativeToBase.startsWith(`${rule.pattern}/`)));
+    if (
+      matched &&
+      (!rule.directoryOnly ||
+        isDirectory ||
+        relativeToBase.startsWith(`${rule.pattern}/`))
+    ) {
       ignored = !rule.negated;
     }
   }

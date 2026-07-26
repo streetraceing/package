@@ -18,5 +18,7 @@ const sensitivePatterns = [
 ];
 
 export function findSensitiveFiles(paths: string[]): string[] {
-  return paths.filter((filePath) => sensitivePatterns.some((pattern) => matchesGlob(filePath, pattern)));
+  return paths.filter((filePath) =>
+    sensitivePatterns.some((pattern) => matchesGlob(filePath, pattern)),
+  );
 }

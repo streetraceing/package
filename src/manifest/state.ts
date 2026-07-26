@@ -3,7 +3,10 @@ import { sha256Buffer, stableJson } from '../util/hash.js';
 import { resolveInside } from '../util/path.js';
 import type { ManifestFile } from '../types.js';
 
-export async function readCurrentManifestFiles(root: string, referenceFiles: ManifestFile[]): Promise<ManifestFile[]> {
+export async function readCurrentManifestFiles(
+  root: string,
+  referenceFiles: ManifestFile[],
+): Promise<ManifestFile[]> {
   const output: ManifestFile[] = [];
   for (const reference of referenceFiles) {
     const absolutePath = resolveInside(root, reference.path);

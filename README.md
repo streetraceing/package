@@ -144,37 +144,33 @@ The file accepts JSON and practical JSON5-style syntax: comments, unquoted keys,
 
 ```json5
 {
-  type: "zip",
-  root: ".",
-  output: ".",
-  name: "{folder}.zip",
+  type: 'zip',
+  root: '.',
+  output: '.',
+  name: '{folder}.zip',
 
-  strategy: "git",
+  strategy: 'git',
   gitignore: true,
   npmignore: false,
 
-  include: ["**/*"],
-  ignore: [
-    "dist/**",
-    "coverage/**",
-    "src/assets/**",
-  ],
+  include: ['**/*'],
+  ignore: ['dist/**', 'coverage/**', 'src/assets/**'],
 
   dot: true,
   followSymlinks: false,
   includeEmptyDirectories: false,
 
   manifest: true,
-  shiftFile: ".packageshift",
+  shiftFile: '.packageshift',
 
   compressionLevel: 9,
   deterministic: true,
   preserveMode: true,
   preserveMtime: false,
 
-  sensitiveFiles: "warn",
+  sensitiveFiles: 'warn',
   backupOnApply: true,
-  conflictStrategy: "abort",
+  conflictStrategy: 'abort',
 
   renameDetection: true,
   renameThreshold: 0.8,

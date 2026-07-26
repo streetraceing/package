@@ -1,7 +1,12 @@
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { sha256Buffer, stableJson } from '../util/hash.js';
-import type { CollectedFile, ManifestFile, PackageConfig, PackageManifest } from '../types.js';
+import type {
+  CollectedFile,
+  ManifestFile,
+  PackageConfig,
+  PackageManifest,
+} from '../types.js';
 
 export async function createManifest(
   files: CollectedFile[],
