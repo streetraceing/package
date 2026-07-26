@@ -1,0 +1,54 @@
+{
+  "name": "@streetraceing/package",
+  "version": "0.1.0",
+  "description": "Package, compare, and safely apply project source archives from the command line.",
+  "type": "module",
+  "bin": {
+    "package": "./dist/bin/package.js"
+  },
+  "files": [
+    "dist/bin",
+    "dist/src",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "npm run clean && tsc -p tsconfig.build.json && node -e \"require('node:fs').chmodSync('dist/bin/package.js', 0o755)\"",
+    "dev": "tsx ./bin/package.ts",
+    "start": "node ./dist/bin/package.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prettier:write": "prettier . --write",
+    "test": "tsx --test test/*.test.ts",
+    "test:built": "npm run build && node --test dist/test/*.test.js",
+    "check": "npm run typecheck && npm test && npm run build",
+    "pack:check": "npm pack --dry-run",
+    "prepublishOnly": "npm run check && npm run pack:check",
+    "prepare": "npm run build",
+    "npm:patch": "npm version patch",
+    "npm:minor": "npm version minor",
+    "npm:major": "npm version major",
+    "npm:publish": "npm publish --access public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "cli",
+    "zip",
+    "archive",
+    "project",
+    "diff",
+    "patch",
+    "gitignore",
+    "typescript"
+  ],
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "prettier": "3.9.6",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  },
+  "license": "MIT"
+}
