@@ -118,3 +118,83 @@ test('creates a snapshot, generates a shift archive, and applies it', async () =
     await rm(workspace, { recursive: true, force: true });
   }
 });
+
+test('snapshot reserves manifest files and embeds the configured shift metadata', async () => {
+  const workspace = await mkdtemp(path.join(tmpdir(), 'package-metadata-'));
+  const source = path.join(workspace, 'source-project');
+  try {
+    await mkdir(source, { recursive: true });
+    await write(source, 'src/index.ts', 'export const value = 1;\n');
+    await write(source, '.packagemanifest.json', '{"stale":true}\n');
+    await write(source, '.packagemanifest', 'legacy manifest\n');
+    await write(
+      source,
+      '.packageshift',
+      'PACKAGESHIFT 1\n\nMESSAGE "Included snapshot instructions"\n',
+    );
+
+    const archivePath = await createSnapshot(
+      {
+        ...defaultConfig,
+        root: source,
+        output: workspace,
+        strategy: 'walk',
+        include: ['src/**'],
+        ignore: ['.packageshift'],
+        dot: false,
+      },
+      { output: '../snapshot.zip', quiet: true },
+    );
+
+    const pkg = await loadPackage(archivePath);
+    assert.deepEqual(
+      pkg.manifest.files.map((file) => file.path),
+      ['src/index.ts'],
+    );
+    assert.equal(pkg.entries.has('.packagemanifest.json'), true);
+    assert.equal(pkg.entries.has('.packagemanifest'), false);
+    assert.equal(pkg.entries.has('.packageshift'), true);
+    assert.equal(pkg.shift?.instructions[0]?.type, 'MESSAGE');
+    assert.equal(
+      pkg.shift?.instructions[0]?.type === 'MESSAGE'
+        ? pkg.shift.instructions[0].value
+        : undefined,
+      'Included snapshot instructions',
+    );
+
+    const generatedManifest = JSON.parse(
+      pkg.entries.get('.packagemanifest.json')?.data.toString('utf8') ?? '{}',
+    ) as Record<string, unknown>;
+    assert.equal(generatedManifest.schemaVersion, 1);
+    assert.equal(generatedManifest.stale, undefined);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test('snapshot validates .packageshift before writing the archive', async () => {
+  const workspace = await mkdtemp(
+    path.join(tmpdir(), 'package-shift-invalid-'),
+  );
+  const source = path.join(workspace, 'source-project');
+  try {
+    await mkdir(source, { recursive: true });
+    await write(source, 'src/index.ts', 'export const value = 1;\n');
+    await write(source, '.packageshift', 'REMOVE "src/index.ts"\n');
+
+    await assert.rejects(
+      createSnapshot(
+        {
+          ...defaultConfig,
+          root: source,
+          output: workspace,
+          strategy: 'walk',
+        },
+        { output: '../snapshot.zip', quiet: true },
+      ),
+      /first instruction must declare the format version/i,
+    );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});

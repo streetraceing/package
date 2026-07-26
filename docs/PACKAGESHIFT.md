@@ -1,6 +1,6 @@
 # PackageShift format
 
-A `.packageshift` file contains one instruction per line. Blank lines and lines beginning with `#` are ignored.
+A `.packageshift` file contains one instruction per line. Blank lines and lines beginning with `#` are ignored. When `package zip` finds the configured `shiftFile`, it validates the file and embeds it in the archive as `.packageshift`, independently of dotfile, include, ignore, and Git ignore filtering.
 
 The first instruction is mandatory:
 

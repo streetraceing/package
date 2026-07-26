@@ -13,6 +13,7 @@ import { writeZip } from '../archive/zip.js';
 import { renderShift } from '../shift/render.js';
 import { sha256File } from '../util/hash.js';
 import { PackageError } from '../errors.js';
+import { packageManifestPath, packageShiftPath } from '../archive/metadata.js';
 
 export interface ShiftCommandOptions {
   output?: string;
@@ -147,12 +148,12 @@ export async function createShiftArchive(
     mtime: file.mtime ? new Date(file.mtime) : undefined,
   }));
   entries.push({
-    path: '.packageshift',
+    path: packageShiftPath,
     data: Buffer.from(renderShift(instructions), 'utf8'),
     mode: 0o644,
   });
   entries.push({
-    path: '.packagemanifest.json',
+    path: packageManifestPath,
     data: Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, 'utf8'),
     mode: 0o644,
   });

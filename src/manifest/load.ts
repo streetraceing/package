@@ -3,6 +3,7 @@ import type { LoadedPackage, PackageManifest } from '../types.js';
 import { readZip } from '../archive/zip.js';
 import { parseShift } from '../shift/parser.js';
 import { sha256Buffer, stableJson } from '../util/hash.js';
+import { packageManifestPath, packageShiftPath } from '../archive/metadata.js';
 
 function validateManifest(value: unknown): PackageManifest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -61,7 +62,7 @@ function validateManifest(value: unknown): PackageManifest {
 
 export async function loadPackage(archivePath: string): Promise<LoadedPackage> {
   const entries = await readZip(archivePath);
-  const manifestEntry = entries.get('.packagemanifest.json');
+  const manifestEntry = entries.get(packageManifestPath);
   if (!manifestEntry)
     throw new PackageError(
       'Archive does not contain .packagemanifest.json.',
@@ -94,9 +95,9 @@ export async function loadPackage(archivePath: string): Promise<LoadedPackage> {
       );
     }
   }
-  const shiftEntry = entries.get('.packageshift');
+  const shiftEntry = entries.get(packageShiftPath);
   const shift = shiftEntry
-    ? parseShift(shiftEntry.data.toString('utf8'), '.packageshift')
+    ? parseShift(shiftEntry.data.toString('utf8'), packageShiftPath)
     : undefined;
   return { archivePath, manifest, shift, entries };
 }

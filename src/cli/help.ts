@@ -21,7 +21,7 @@ Run without a global installation:
 
 Core options:
   --cwd <path>                Project directory
-  --config <path>             Configuration file (default: .packagerc)
+  --config <path>             Strict JSON config (default: .packagerc)
   -o, --output <path>         Output archive path
   --ignore <glob>             Add an ignore pattern; repeatable
   --include <glob>            Add an include pattern; repeatable

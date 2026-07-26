@@ -41,7 +41,7 @@ Create a full snapshot:
 package zip
 ```
 
-The default output is `<project-folder>.zip`. The archive contains the selected project files and `.packagemanifest.json` with SHA-256 hashes, Unix modes, and package metadata.
+The default output is `<project-folder>.zip`. The archive contains the selected project files and a newly generated `.packagemanifest.json` with SHA-256 hashes, Unix modes, and package metadata. When the configured `shiftFile` exists, it is validated and embedded as `.packageshift`.
 
 Create an update package after changing the project:
 
@@ -129,10 +129,12 @@ These paths are always excluded:
 .git/**
 node_modules/**
 .package-backups/**
+.packagemanifest
 .packagemanifest.json
+.packageshift
 ```
 
-The archive currently being created is excluded automatically.
+These metadata paths are reserved at the project root and are not added to the payload manifest or root hash. Existing manifest files are never trusted or copied: the CLI always generates `.packagemanifest.json` again. The configured `shiftFile` is read separately, so it can still be embedded when dotfiles, glob rules, or ignore files would normally exclude it. The archive currently being created is excluded automatically.
 
 ## Configuration
 
@@ -142,42 +144,34 @@ Run this command to create `.packagerc`:
 package init
 ```
 
-The generated file includes the JSON Schema URL `https://streetraceing.github.io/package/schema.json` for editor completion and validation. It accepts JSON and practical JSON5-style syntax: comments, unquoted keys, single-quoted strings, and trailing commas.
+The generated file includes the JSON Schema URL `https://streetraceing.github.io/package/schema.json` for editor completion and validation. `.packagerc` uses strict JSON: all keys and strings must use double quotes, and comments or trailing commas are not allowed.
 
-```json5
+```json
 {
-  $schema: 'https://streetraceing.github.io/package/schema.json',
-
-  type: 'zip',
-  root: '.',
-  output: '.',
-  name: '{folder}.zip',
-
-  strategy: 'git',
-  gitignore: true,
-  npmignore: false,
-
-  include: ['**/*'],
-  ignore: ['dist/**', 'coverage/**', 'src/assets/**'],
-
-  dot: true,
-  followSymlinks: false,
-  includeEmptyDirectories: false,
-
-  manifest: true,
-  shiftFile: '.packageshift',
-
-  compressionLevel: 9,
-  deterministic: true,
-  preserveMode: true,
-  preserveMtime: false,
-
-  sensitiveFiles: 'warn',
-  backupOnApply: true,
-  conflictStrategy: 'abort',
-
-  renameDetection: true,
-  renameThreshold: 0.8,
+  "$schema": "https://streetraceing.github.io/package/schema.json",
+  "type": "zip",
+  "root": ".",
+  "output": ".",
+  "name": "{folder}.zip",
+  "strategy": "git",
+  "gitignore": true,
+  "npmignore": false,
+  "include": ["**/*"],
+  "ignore": ["dist/**", "coverage/**", "src/assets/**"],
+  "dot": true,
+  "followSymlinks": false,
+  "includeEmptyDirectories": false,
+  "manifest": true,
+  "shiftFile": ".packageshift",
+  "compressionLevel": 9,
+  "deterministic": true,
+  "preserveMode": true,
+  "preserveMtime": false,
+  "sensitiveFiles": "warn",
+  "backupOnApply": true,
+  "conflictStrategy": "abort",
+  "renameDetection": true,
+  "renameThreshold": 0.8
 }
 ```
 
@@ -191,7 +185,8 @@ A snapshot ZIP stores all selected files:
 project.zip
 ├── src/...
 ├── package.json
-└── .packagemanifest.json
+├── .packagemanifest.json
+└── .packageshift        # only when shiftFile exists
 ```
 
 A shift ZIP stores only added and modified payload files, plus structural operations:
@@ -207,7 +202,7 @@ Exact renames are detected by matching SHA-256 hashes. Ambiguous fuzzy renames a
 
 ## `.packageshift`
 
-`.packageshift` describes file-system operations that archive contents alone cannot express:
+`.packageshift` describes file-system operations that archive contents alone cannot express. During `package zip`, the configured `shiftFile` is parsed before the ZIP is written and stored under the canonical archive path `.packageshift`:
 
 ```text
 PACKAGESHIFT 1

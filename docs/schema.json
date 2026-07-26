@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://streetraceing.github.io/package/schema.json",
   "title": "@streetraceing/package configuration",
-  "description": "Configuration for the @streetraceing/package CLI. Store this object in .packagerc or .packagerc.json.",
+  "description": "Strict JSON configuration for the @streetraceing/package CLI. Store this object in .packagerc or .packagerc.json.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -94,7 +94,7 @@
       "type": "string",
       "minLength": 1,
       "default": ".packageshift",
-      "description": "Filename used for PackageShift structural instructions inside update archives."
+      "description": "Project-relative PackageShift source file. When present, package zip validates it and stores it as the reserved .packageshift archive entry."
     },
     "compressionLevel": {
       "type": "integer",

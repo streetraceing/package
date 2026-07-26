@@ -4,7 +4,8 @@ import { promisify } from 'node:util';
 import { lstat, readdir, readFile, realpath } from 'node:fs/promises';
 import type { CollectedFile, PackageConfig } from '../types.js';
 import { PackageError } from '../errors.js';
-import { isDotPath, toPosixPath } from '../util/path.js';
+import { isDotPath, normalizeRelativePath, toPosixPath } from '../util/path.js';
+import { reservedPackageMetadataPaths } from '../archive/metadata.js';
 import {
   isIgnored,
   matchesGlob,
@@ -20,7 +21,6 @@ const hardIgnored = [
   'node_modules',
   '.package-backups/**',
   '.package-backups',
-  '.packagemanifest.json',
 ];
 
 async function gitFiles(root: string): Promise<string[] | undefined> {
@@ -43,6 +43,14 @@ async function gitFiles(root: string): Promise<string[] | undefined> {
   }
 }
 
+function isPackageMetadataPath(
+  relativePath: string,
+  config: PackageConfig,
+): boolean {
+  if (reservedPackageMetadataPaths.has(relativePath)) return true;
+  return relativePath === normalizeRelativePath(config.shiftFile);
+}
+
 function passesPatterns(
   relativePath: string,
   config: PackageConfig,
@@ -50,6 +58,7 @@ function passesPatterns(
 ): boolean {
   if (hardIgnored.some((pattern) => matchesGlob(relativePath, pattern)))
     return false;
+  if (isPackageMetadataPath(relativePath, config)) return false;
   if (
     outputArchive &&
     path.resolve(config.root, relativePath) === path.resolve(outputArchive)
@@ -152,6 +161,7 @@ async function collectWithWalk(
       const isDirectory = entry.isDirectory();
       if (hardIgnored.some((pattern) => matchesGlob(relativePath, pattern)))
         continue;
+      if (isPackageMetadataPath(relativePath, config)) continue;
       if (isIgnored(relativePath, isDirectory, localRules)) continue;
       if (!config.dot && isDotPath(relativePath)) continue;
       if (

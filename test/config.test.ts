@@ -30,6 +30,11 @@ test('package init creates a schema-enabled .packagerc', async () => {
       ),
     );
 
+    const parsed = JSON.parse(generated) as Record<string, unknown>;
+    assert.equal(parsed.$schema, configSchemaUrl);
+    assert.equal(parsed.root, defaultConfig.root);
+    assert.equal(parsed.renameThreshold, defaultConfig.renameThreshold);
+
     const loaded = await loadConfig(workspace);
     assert.equal(loaded.config.$schema, configSchemaUrl);
     assert.equal(loaded.config.gitignore, true);
@@ -61,12 +66,49 @@ test('configuration rejects options not declared by the schema', async () => {
   try {
     await writeFile(
       path.join(workspace, '.packagerc'),
-      '{ unknownOption: true }\n',
+      '{\n  \"unknownOption\": true\n}\n',
       'utf8',
     );
     await assert.rejects(
       loadConfig(workspace),
       /unknown option "unknownOption"/,
+    );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test('configuration rejects JSON5-only syntax', async () => {
+  const workspace = await mkdtemp(path.join(tmpdir(), 'package-json-only-'));
+  try {
+    await writeFile(
+      path.join(workspace, '.packagerc'),
+      `{
+        // Comments are not valid JSON.
+        "type": "zip",
+      }\n`,
+      'utf8',
+    );
+    await assert.rejects(
+      loadConfig(workspace),
+      /must use strict JSON: double-quoted keys and strings, no comments, and no trailing commas/,
+    );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test('configuration rejects numeric strings', async () => {
+  const workspace = await mkdtemp(path.join(tmpdir(), 'package-json-types-'));
+  try {
+    await writeFile(
+      path.join(workspace, '.packagerc'),
+      '{\n  "compressionLevel": "9"\n}\n',
+      'utf8',
+    );
+    await assert.rejects(
+      loadConfig(workspace),
+      /compressionLevel must be an integer from 0 to 9/,
     );
   } finally {
     await rm(workspace, { recursive: true, force: true });
