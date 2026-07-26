@@ -53,7 +53,7 @@ export async function checkCommand(
   const fileWord = pkg.manifest.files.length === 1 ? 'file' : 'files';
   if (pkg.manifestSource === 'generated') {
     console.log(
-      `No manifest found; validated as a PackageShift archive with ${pkg.manifest.files.length} payload ${fileWord}.`,
+      `No manifest found; validated as a .packageshift archive with ${pkg.manifest.files.length} payload ${fileWord}.`,
     );
   } else if (pkg.manifestSource === 'legacy') {
     console.log(
@@ -66,7 +66,7 @@ export async function checkCommand(
     const instructionWord =
       pkg.shift.instructions.length === 1 ? 'instruction' : 'instructions';
     console.log(
-      `${pkg.shift.instructions.length} PackageShift ${instructionWord} parsed`,
+      `${pkg.shift.instructions.length} .packageshift ${instructionWord} parsed`,
     );
   }
 }

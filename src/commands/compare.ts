@@ -35,20 +35,35 @@ async function instructionToChange(
 ): Promise<ProjectChange | undefined> {
   if (instruction.type === 'REMOVE') {
     const current = await fileState(root, instruction.path);
-    return current
-      ? { kind: 'REMOVE', path: instruction.path, beforeHash: current.hash }
-      : { kind: 'UNCHANGED', path: instruction.path };
+    if (!current) return { kind: 'UNCHANGED', path: instruction.path };
+    if (instruction.expectedHash && current.hash !== instruction.expectedHash)
+      return {
+        kind: 'CONFLICT',
+        path: instruction.path,
+        beforeHash: current.hash,
+        detail: `expected ${instruction.expectedHash}, current ${current.hash}`,
+      };
+    return { kind: 'REMOVE', path: instruction.path, beforeHash: current.hash };
   }
   if (instruction.type === 'MOVE') {
     const source = await fileState(root, instruction.from);
     const destination = await fileState(root, instruction.to);
-    if (source)
+    if (source) {
+      if (instruction.expectedHash && source.hash !== instruction.expectedHash)
+        return {
+          kind: 'CONFLICT',
+          path: instruction.from,
+          destination: instruction.to,
+          beforeHash: source.hash,
+          detail: `expected ${instruction.expectedHash}, current ${source.hash}`,
+        };
       return {
         kind: 'MOVE',
         path: instruction.from,
         destination: instruction.to,
         beforeHash: source.hash,
       };
+    }
     if (
       destination &&
       (!instruction.expectedHash ||
@@ -112,9 +127,25 @@ export async function comparePackageToProject(
   root: string,
 ): Promise<{ changes: ProjectChange[]; baseMatches?: boolean }> {
   const changes: ProjectChange[] = [];
+  const expectedPayloadHashes = new Map<string, string>();
+  for (const instruction of pkg.shift?.instructions ?? []) {
+    if (instruction.type === 'REPLACE' && instruction.expectedHash)
+      expectedPayloadHashes.set(instruction.path, instruction.expectedHash);
+  }
   for (const file of pkg.manifest.files) {
     const current = await fileState(root, file.path);
-    if (!current) {
+    const expectedHash = expectedPayloadHashes.get(file.path);
+    if (current && expectedHash && current.hash !== expectedHash) {
+      changes.push({
+        kind: 'CONFLICT',
+        path: file.path,
+        beforeHash: current.hash,
+        afterHash: file.sha256,
+        beforeMode: current.mode,
+        afterMode: file.mode,
+        detail: `expected ${expectedHash}, current ${current.hash}`,
+      });
+    } else if (!current) {
       changes.push({
         kind: 'ADD',
         path: file.path,

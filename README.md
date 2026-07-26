@@ -20,10 +20,6 @@ Or install globally:
 
 ```bash
 npm install --global @streetraceing/package
-
-package zip
-package update.zip diff
-package update.zip apply
 ```
 
 Both command orders are supported:
@@ -108,6 +104,8 @@ Apply options:
 --backup / --no-backup
 --conflict abort|overwrite|skip
 ```
+
+`abort` keeps the apply operation atomic and changes nothing when an `IF sha256:...` guard fails. Use `--conflict overwrite` to apply the archive version of conflicting files, or `--conflict skip` to apply the rest while preserving those local files. `--force` bypasses both base and per-file hash guards.
 
 Run `package --help` for the complete command reference.
 
@@ -198,7 +196,7 @@ update.zip
 └── .packageshift
 ```
 
-Manually created PackageShift archives may omit the manifest:
+Manually created .packageshift archives may omit the manifest:
 
 ```text
 manual-update.zip

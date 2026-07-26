@@ -1,4 +1,4 @@
-# PackageShift format
+# .packageshift format
 
 A `.packageshift` file contains one instruction per line. Blank lines and lines beginning with `#` are ignored. When `package zip` finds the configured `shiftFile`, it validates the file and embeds it in the archive as `.packageshift`, independently of dotfile, include, ignore, and Git ignore filtering.
 
@@ -49,7 +49,7 @@ Change Unix permissions:
 CHMOD "scripts/deploy.sh" 755
 ```
 
-The `IF sha256:...` condition is optional, but recommended for destructive operations.
+The `IF sha256:...` condition is optional, but recommended for destructive operations. When a local hash differs, interactive `package apply` asks whether to abort, overwrite, or skip. The same behavior can be selected directly with `--conflict abort|overwrite|skip`; `--force` bypasses all base and per-file hash guards.
 
 ## Paths
 
@@ -69,7 +69,7 @@ Validate an archive and parse its shift file without changing the project:
 package check update.zip
 ```
 
-A manually created archive may contain `.packageshift` without `.packagemanifest.json`. In that case the CLI validates the ZIP payload and PackageShift syntax, generates temporary file metadata in memory, and reports that embedded manifest/base verification is unavailable. Legacy JSON metadata stored as `.packagemanifest` is also supported.
+A manually created archive may contain `.packageshift` without `.packagemanifest.json`. In that case the CLI validates the ZIP payload and .packageshift syntax, generates temporary file metadata in memory, and reports that embedded manifest/base verification is unavailable. Legacy JSON metadata stored as `.packagemanifest` is also supported.
 
 Preview the complete application plan:
 

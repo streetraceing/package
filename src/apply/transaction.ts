@@ -14,6 +14,7 @@ import { stdin as input, stdout as output } from 'node:process';
 import type {
   ApplyOptions,
   ArchiveEntry,
+  ConflictStrategy,
   LoadedPackage,
   ShiftInstruction,
 } from '../types.js';
@@ -92,19 +93,26 @@ async function ensureSafePaths(root: string, paths: string[]): Promise<void> {
   }
 }
 
-async function verifyExpected(
+interface ExpectedConflict {
+  instruction: ShiftInstruction;
+  path: string;
+  expectedHash: string;
+  currentHash?: string;
+  reason: 'missing' | 'changed';
+}
+
+async function expectedConflict(
   root: string,
   instruction: ShiftInstruction,
-  force: boolean,
-): Promise<void> {
+): Promise<ExpectedConflict | undefined> {
   if (
     instruction.type !== 'REMOVE' &&
     instruction.type !== 'MOVE' &&
     instruction.type !== 'REPLACE'
   )
-    return;
+    return undefined;
   const expectedHash = instruction.expectedHash;
-  if (!expectedHash) return;
+  if (!expectedHash) return undefined;
   const relativePath =
     instruction.type === 'MOVE' ? instruction.from : instruction.path;
   const current = await existingFile(root, relativePath);
@@ -112,21 +120,62 @@ async function verifyExpected(
     if (instruction.type === 'MOVE') {
       const destination = await existingFile(root, instruction.to);
       if (destination && sha256Buffer(destination.data) === expectedHash)
-        return;
+        return undefined;
     }
-    if (!force)
-      throw new PackageError(
-        `Expected file is missing: ${relativePath}`,
-        'APPLY_CONFLICT',
-      );
-    return;
+    return {
+      instruction,
+      path: relativePath,
+      expectedHash,
+      reason: 'missing',
+    };
   }
   const currentHash = sha256Buffer(current.data);
-  if (currentHash !== expectedHash && !force) {
-    throw new PackageError(
-      `File has changed since the base package: ${relativePath}\nExpected ${expectedHash}\nCurrent  ${currentHash}`,
-      'APPLY_CONFLICT',
+  if (currentHash === expectedHash) return undefined;
+  return {
+    instruction,
+    path: relativePath,
+    expectedHash,
+    currentHash,
+    reason: 'changed',
+  };
+}
+
+function conflictPaths(conflict: ExpectedConflict): string[] {
+  const instruction = conflict.instruction;
+  if (instruction.type === 'MOVE') return [instruction.from, instruction.to];
+  if (instruction.type === 'REMOVE' || instruction.type === 'REPLACE')
+    return [instruction.path];
+  return [];
+}
+
+function conflictMessage(conflict: ExpectedConflict): string {
+  const details =
+    conflict.reason === 'missing'
+      ? `Expected file is missing: ${conflict.path}`
+      : `File has changed since the base package: ${conflict.path}\nExpected ${conflict.expectedHash}\nCurrent  ${conflict.currentHash}`;
+  return `${details}\nNo files were changed. Re-run with --conflict overwrite to replace conflicting files, --conflict skip to leave them unchanged, or --force to bypass all guards.`;
+}
+
+async function chooseConflictStrategy(
+  options: ApplyOptions,
+  conflictCount: number,
+): Promise<ConflictStrategy> {
+  if (options.force) return 'overwrite';
+  if (options.conflictStrategy !== 'abort') return options.conflictStrategy;
+  if (options.yes || !process.stdin.isTTY || !process.stdout.isTTY)
+    return 'abort';
+
+  const readline = createInterface({ input, output });
+  try {
+    const answer = await readline.question(
+      `${conflictCount} .packageshift hash conflict${conflictCount === 1 ? '' : 's'} detected. [a]bort, [o]verwrite, or [s]kip? [a] `,
     );
+    const normalized = answer.trim().toLowerCase();
+    if (normalized === 'o' || normalized === 'overwrite') return 'overwrite';
+    if (normalized === 's' || normalized === 'skip') return 'skip';
+    return 'abort';
+  } finally {
+    readline.close();
   }
 }
 
@@ -317,7 +366,12 @@ async function executeInstruction(
 export async function applyPackage(
   pkg: LoadedPackage,
   options: ApplyOptions,
-): Promise<{ backupPath?: string; changedPaths: number }> {
+): Promise<{
+  backupPath?: string;
+  changedPaths: number;
+  skippedPaths: string[];
+  overwrittenConflicts: string[];
+}> {
   const paths = affectedPaths(pkg);
   await ensureSafePaths(options.cwd, paths);
   if (pkg.manifest.baseFiles && pkg.manifest.baseRootHash && !options.force) {
@@ -333,20 +387,52 @@ export async function applyPackage(
       );
     }
   }
-  for (const instruction of pkg.shift?.instructions ?? [])
-    await verifyExpected(options.cwd, instruction, options.force);
-  if (options.dryRun) return { changedPaths: paths.length };
-  if (!(await shouldProceed(options, paths.length)))
+  const conflicts: ExpectedConflict[] = [];
+  for (const instruction of pkg.shift?.instructions ?? []) {
+    const conflict = await expectedConflict(options.cwd, instruction);
+    if (conflict) conflicts.push(conflict);
+  }
+  const conflictStrategy =
+    conflicts.length === 0
+      ? options.conflictStrategy
+      : await chooseConflictStrategy(options, conflicts.length);
+  const skippedInstructions = new Set<ShiftInstruction>();
+  const skippedPaths = new Set<string>();
+  const overwrittenConflicts: string[] = [];
+  for (const conflict of conflicts) {
+    if (conflictStrategy === 'overwrite') {
+      overwrittenConflicts.push(conflict.path);
+      continue;
+    }
+    if (conflictStrategy === 'skip') {
+      skippedInstructions.add(conflict.instruction);
+      for (const conflictPath of conflictPaths(conflict))
+        skippedPaths.add(conflictPath);
+      continue;
+    }
+    throw new PackageError(conflictMessage(conflict), 'APPLY_CONFLICT');
+  }
+  const activePaths = paths.filter((item) => !skippedPaths.has(item));
+  if (options.dryRun)
+    return {
+      changedPaths: activePaths.length,
+      skippedPaths: [...skippedPaths].sort(),
+      overwrittenConflicts: overwrittenConflicts.sort(),
+    };
+  if (!(await shouldProceed(options, activePaths.length)))
     throw new PackageError('Apply cancelled.', 'APPLY_CANCELLED');
 
-  const backup = await captureBackup(options.cwd, paths);
+  const backup = await captureBackup(options.cwd, activePaths);
   const backupPath = options.backup
     ? await persistBackup(options.cwd, backup)
     : undefined;
   try {
-    for (const instruction of pkg.shift?.instructions ?? [])
+    for (const instruction of pkg.shift?.instructions ?? []) {
+      if (skippedInstructions.has(instruction)) continue;
       await executeInstruction(options.cwd, instruction, options);
+    }
     for (const file of pkg.manifest.files) {
+      if (skippedPaths.has(file.path)) continue;
       const entry = pkg.entries.get(file.path);
       if (!entry)
         throw new PackageError(
@@ -364,5 +450,10 @@ export async function applyPackage(
       'APPLY_ROLLBACK',
     );
   }
-  return { backupPath, changedPaths: paths.length };
+  return {
+    backupPath,
+    changedPaths: activePaths.length,
+    skippedPaths: [...skippedPaths].sort(),
+    overwrittenConflicts: overwrittenConflicts.sort(),
+  };
 }

@@ -133,7 +133,7 @@ export function parseShift(
     fail(
       header[1] as ShiftToken,
       sourceName,
-      'Unsupported PackageShift version.',
+      'Unsupported .packageshift version.',
       'This release supports: PACKAGESHIFT 1',
       'PS1007',
     );

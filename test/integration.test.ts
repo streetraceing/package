@@ -202,7 +202,7 @@ test('snapshot validates .packageshift before writing the archive', async () => 
   }
 });
 
-test('accepts a manifestless PackageShift archive for check, diff, and apply', async () => {
+test('accepts a manifestless .packageshift archive for check, diff, and apply', async () => {
   const workspace = await mkdtemp(path.join(tmpdir(), 'package-manifestless-'));
   const target = path.join(workspace, 'target-project');
   const archivePath = path.join(workspace, 'update.zip');
@@ -312,6 +312,113 @@ test('accepts legacy .packagemanifest metadata', async () => {
     const pkg = await loadPackage(archivePath);
     assert.equal(pkg.manifestSource, 'legacy');
     assert.equal(pkg.manifest.files[0]?.path, 'src/index.ts');
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test('applies .packageshift hash conflicts according to conflict strategy', async () => {
+  const workspace = await mkdtemp(path.join(tmpdir(), 'package-conflicts-'));
+  const target = path.join(workspace, 'target-project');
+  const archivePath = path.join(workspace, 'update.zip');
+  const baseConfig = Buffer.from('{"version":1}\n', 'utf8');
+  const localConfig = '{"version":"local"}\n';
+  const archiveConfig = Buffer.from('{"version":2}\n', 'utf8');
+  const oldSource = Buffer.from('old\n', 'utf8');
+  const newSource = Buffer.from('new\n', 'utf8');
+  try {
+    await mkdir(target, { recursive: true });
+    await write(target, '.packagerc', localConfig);
+    await write(target, 'src/index.ts', oldSource.toString('utf8'));
+
+    await writeZip(
+      archivePath,
+      [
+        { path: '.packagerc', data: archiveConfig, mode: 0o644 },
+        { path: 'src/index.ts', data: newSource, mode: 0o644 },
+        {
+          path: '.packageshift',
+          data: Buffer.from(
+            [
+              'PACKAGESHIFT 1',
+              '',
+              `REPLACE ".packagerc" IF ${sha256Buffer(baseConfig)}`,
+              `REPLACE "src/index.ts" IF ${sha256Buffer(oldSource)}`,
+              '',
+            ].join('\n'),
+            'utf8',
+          ),
+          mode: 0o644,
+        },
+      ],
+      { compressionLevel: 9, deterministic: true },
+    );
+
+    const pkg = await loadPackage(archivePath);
+    const comparison = await comparePackageToProject(pkg, target);
+    assert.ok(
+      comparison.changes.some(
+        (change) => change.kind === 'CONFLICT' && change.path === '.packagerc',
+      ),
+    );
+
+    await assert.rejects(
+      applyPackage(pkg, {
+        cwd: target,
+        dryRun: false,
+        yes: true,
+        force: false,
+        backup: false,
+        conflictStrategy: 'abort',
+      }),
+      /--conflict overwrite/,
+    );
+    assert.equal(
+      await readFile(path.join(target, '.packagerc'), 'utf8'),
+      localConfig,
+    );
+    assert.equal(
+      await readFile(path.join(target, 'src/index.ts'), 'utf8'),
+      'old\n',
+    );
+
+    const overwritten = await applyPackage(pkg, {
+      cwd: target,
+      dryRun: false,
+      yes: true,
+      force: false,
+      backup: false,
+      conflictStrategy: 'overwrite',
+    });
+    assert.deepEqual(overwritten.overwrittenConflicts, ['.packagerc']);
+    assert.equal(
+      await readFile(path.join(target, '.packagerc'), 'utf8'),
+      '{"version":2}\n',
+    );
+    assert.equal(
+      await readFile(path.join(target, 'src/index.ts'), 'utf8'),
+      'new\n',
+    );
+
+    await write(target, '.packagerc', localConfig);
+    await write(target, 'src/index.ts', 'old\n');
+    const skipped = await applyPackage(pkg, {
+      cwd: target,
+      dryRun: false,
+      yes: true,
+      force: false,
+      backup: false,
+      conflictStrategy: 'skip',
+    });
+    assert.deepEqual(skipped.skippedPaths, ['.packagerc']);
+    assert.equal(
+      await readFile(path.join(target, '.packagerc'), 'utf8'),
+      localConfig,
+    );
+    assert.equal(
+      await readFile(path.join(target, 'src/index.ts'), 'utf8'),
+      'new\n',
+    );
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }

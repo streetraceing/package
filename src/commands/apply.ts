@@ -16,11 +16,14 @@ export async function applyCommand(
   console.log(`Target:  ${path.resolve(options.cwd)}`);
   if (pkg.manifestSource === 'generated') {
     console.log(
-      'Warning: archive has no embedded manifest; applying ZIP-verified payload and PackageShift instructions without base verification.',
+      'Warning: archive has no embedded manifest; applying ZIP-verified payload and .packageshift instructions without base verification.',
     );
   } else if (pkg.manifestSource === 'legacy') {
     console.log('Manifest: legacy .packagemanifest');
   }
+  if (options.force) console.log('Conflict policy: force');
+  else if (options.conflictStrategy !== 'abort')
+    console.log(`Conflict policy: ${options.conflictStrategy}`);
   console.log('');
   console.log(formatChanges(comparison.changes));
   console.log('');
@@ -33,4 +36,10 @@ export async function applyCommand(
     console.log(`Applied ${result.changedPaths} paths.`);
     if (result.backupPath) console.log(`Backup: ${result.backupPath}`);
   }
+  if (result.overwrittenConflicts.length > 0)
+    console.log(
+      `Overwritten conflicts: ${result.overwrittenConflicts.join(', ')}`,
+    );
+  if (result.skippedPaths.length > 0)
+    console.log(`Skipped conflicts: ${result.skippedPaths.join(', ')}`);
 }

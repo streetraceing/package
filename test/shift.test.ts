@@ -5,7 +5,7 @@ import { ShiftSyntaxError } from '../src/errors.js';
 
 const hash = `sha256:${'a'.repeat(64)}`;
 
-test('parses PackageShift instructions', () => {
+test('parses .packageshift instructions', () => {
   const parsed = parseShift(
     `PACKAGESHIFT 1\n\nMESSAGE "API update"\nBASE ${hash}\nREMOVE "src/unused.ts" IF ${hash}\nMOVE "src/old.ts" TO "src/new.ts" IF ${hash}\nCOPY "a.ts" TO "b.ts"\nREPLACE "src/index.ts"\nCHMOD "scripts/run.sh" 755\n`,
   );

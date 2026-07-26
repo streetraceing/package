@@ -94,7 +94,7 @@
       "type": "string",
       "minLength": 1,
       "default": ".packageshift",
-      "description": "Project-relative PackageShift source file. When present, package zip validates it and stores it as the reserved .packageshift archive entry."
+      "description": "Project-relative .packageshift source file. When present, package zip validates it and stores it as the reserved .packageshift archive entry."
     },
     "compressionLevel": {
       "type": "integer",
@@ -133,7 +133,7 @@
       "type": "string",
       "enum": ["abort", "overwrite", "skip"],
       "default": "abort",
-      "description": "Default behavior when local files conflict with an update package."
+      "description": "Default behavior for destination and .packageshift IF sha256 conflicts: abort the whole operation, overwrite local files, or skip conflicting paths."
     },
     "renameDetection": {
       "type": "boolean",

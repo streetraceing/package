@@ -21,7 +21,7 @@
   "preserveMode": true,
   "preserveMtime": false,
   "sensitiveFiles": "warn",
-  "backupOnApply": true,
+  "backupOnApply": false,
   "conflictStrategy": "abort",
   "renameDetection": true,
   "renameThreshold": 0.8

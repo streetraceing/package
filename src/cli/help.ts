@@ -38,7 +38,7 @@ Apply options:
   -y, --yes                   Skip interactive confirmation
   -f, --force                 Ignore base/hash conflicts
   --[no-]backup               Keep or disable a persistent backup
-  --conflict <strategy>       abort, overwrite, or skip
+  --conflict <strategy>       Handle local/hash conflicts: abort, overwrite, or skip
 
 Shift options:
   --message <text>            Add a MESSAGE instruction
