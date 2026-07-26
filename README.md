@@ -1,253 +1,141 @@
 # @streetraceing/package
 
-A dependency-free TypeScript CLI for creating clean project ZIP archives, comparing them with a local project, and applying structured update packages safely.
+[![npm version](https://img.shields.io/npm/v/%40streetraceing/package?logo=npm&label=npm)](https://www.npmjs.com/package/@streetraceing/package)
+[![Node.js version](https://img.shields.io/node/v/%40streetraceing/package?logo=node.js&label=node)](https://nodejs.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+Package is a dependency-free TypeScript command-line tool for creating project
+source archives, generating update packages, and safely applying them to another
+copy of a project.
+
+- clean ZIP snapshots with SHA-256 file hashes, Unix modes, and package metadata;
+- incremental update archives with additions, replacements, removals, moves, and
+  permission changes;
+- comparison and dry-run support before an update is applied;
+- path, archive-integrity, base-project, and per-file conflict checks, with
+  optional backups and rollback.
 
 Requires Node.js 18 or later.
 
-Documentation: https://streetraceing.github.io/package
+## Install and use
 
-## Use
-
-Run without installing:
+Run the CLI without a global installation:
 
 ```bash
 npx @streetraceing/package zip
+```
+
+Create a snapshot, generate an update from it after changing the project, then
+inspect or apply that update:
+
+```bash
+npx @streetraceing/package zip
+npx @streetraceing/package shift base.zip --output update.zip
 npx @streetraceing/package diff update.zip
-npx @streetraceing/package apply update.zip
+npx @streetraceing/package apply update.zip --dry-run
+npx @streetraceing/package apply update.zip --yes
 ```
 
-Or install globally:
+Common options:
 
 ```bash
-npm install --global @streetraceing/package
+npx @streetraceing/package zip --output release.zip
+npx @streetraceing/package zip --cwd /path/to/project --strategy=walk
+npx @streetraceing/package shift base.zip --message "Describe the update"
+npx @streetraceing/package apply update.zip --conflict=skip
+npx @streetraceing/package inspect update.zip --json
 ```
 
-Both command orders are supported:
+Both command orders work for archive operations:
 
 ```bash
-package diff update.zip
-package update.zip diff
+npx @streetraceing/package diff update.zip
+npx @streetraceing/package update.zip diff
 ```
 
-## Main workflow
+Run `npx @streetraceing/package --help` to see every command and option.
 
-Create a full snapshot:
+## Configuration and package format
 
-```bash
-package zip
-```
+Run `package init` to generate a strict-JSON `.packagerc` file with schema
+support. By default, Package uses Git file selection when it is available;
+otherwise it uses its built-in ignore-aware walker. Git metadata, dependencies,
+previous package metadata, and backup directories are always excluded.
 
-The default output is `<project-folder>.zip`. The archive contains the selected project files and a newly generated `.packagemanifest.json` with SHA-256 hashes, Unix modes, and package metadata. When the configured `shiftFile` exists, it is validated and embedded as `.packageshift`.
+Snapshot archives contain all selected files and a generated
+`.packagemanifest.json`. Update archives contain changed payload files,
+`.packageshift`, and metadata that identifies the base snapshot. The
+`.packageshift` format describes removals, moves, copies, replacements, and
+permission changes that ZIP contents alone cannot represent.
 
-Create an update package after changing the project:
-
-```bash
-package shift base.zip --output update.zip
-```
-
-Preview the update against another copy of the project:
-
-```bash
-package diff update.zip
-package apply update.zip --dry-run
-```
-
-Apply it:
-
-```bash
-package apply update.zip
-```
-
-In CI or another non-interactive shell, pass `--yes`:
-
-```bash
-package apply update.zip --yes
-```
-
-Before writing, `apply` validates paths, archive integrity, expected file hashes, and symbolic-link boundaries. Archives created by `package zip` or `package shift` also include a manifest for payload and base-project verification. By default `apply` creates a backup in `.package-backups/` and rolls back partial changes when an operation fails.
-
-## Commands
-
-```text
-package zip [directory]
-package shift <base.zip>
-package diff <archive.zip>
-package apply <archive.zip>
-package inspect <archive.zip>
-package check <archive.zip>
-package list [archive.zip]
-package init
-```
-
-Useful options:
-
-```text
---cwd <path>                Select the project directory
---config <path>             Select a config file
--o, --output <path>         Set the output archive
---ignore <glob>             Add an ignore pattern; repeatable
---include <glob>            Add an include pattern; repeatable
---strategy <git|walk>       Select collection strategy
---[no-]gitignore            Toggle .gitignore support
---[no-]npmignore            Toggle .npmignore support
---[no-]dot                  Include or exclude dotfiles
---compression-level <0-9>   Set ZIP compression
---json                      Print machine-readable output
-```
-
-Apply options:
-
-```text
---dry-run
---yes
---force
---backup / --no-backup
---conflict abort|overwrite|skip
-```
-
-`abort` keeps the apply operation atomic and changes nothing when an `IF sha256:...` guard fails. Use `--conflict overwrite` to apply the archive version of conflicting files, or `--conflict skip` to apply the rest while preserving those local files. `--force` bypasses both base and per-file hash guards.
-
-Run `package --help` for the complete command reference.
-
-## File selection
-
-The default strategy is `git`. Inside a Git worktree, the CLI uses:
-
-```bash
-git ls-files --cached --others --exclude-standard
-```
-
-This respects tracked files, nested `.gitignore` files, `.git/info/exclude`, and the user's global Git ignore rules.
-
-When Git is unavailable, or `strategy` is set to `walk`, the CLI uses its internal directory walker and ignore matcher.
-
-These paths are always excluded:
-
-```text
-.git/**
-node_modules/**
-.package-backups/**
-.packagemanifest
-.packagemanifest.json
-.packageshift
-```
-
-These metadata paths are reserved at the project root and are not added to the payload manifest or root hash. Existing manifest files are never trusted or copied: the CLI always generates `.packagemanifest.json` again. The configured `shiftFile` is read separately, so it can still be embedded when dotfiles, glob rules, or ignore files would normally exclude it. The archive currently being created is excluded automatically.
-
-## Configuration
-
-Run this command to create `.packagerc`:
-
-```bash
-package init
-```
-
-The generated file includes the JSON Schema URL `https://streetraceing.github.io/package/schema.json` for editor completion and validation. `.packagerc` uses strict JSON: all keys and strings must use double quotes, and comments or trailing commas are not allowed.
-
-```json
-{
-  "$schema": "https://streetraceing.github.io/package/schema.json",
-  "type": "zip",
-  "root": ".",
-  "output": ".",
-  "name": "{folder}.zip",
-  "strategy": "git",
-  "gitignore": true,
-  "npmignore": false,
-  "include": ["**/*"],
-  "ignore": ["dist/**", "coverage/**", "src/assets/**"],
-  "dot": true,
-  "followSymlinks": false,
-  "includeEmptyDirectories": false,
-  "manifest": true,
-  "shiftFile": ".packageshift",
-  "compressionLevel": 9,
-  "deterministic": true,
-  "preserveMode": true,
-  "preserveMtime": false,
-  "sensitiveFiles": "warn",
-  "backupOnApply": true,
-  "conflictStrategy": "abort",
-  "renameDetection": true,
-  "renameThreshold": 0.8
-}
-```
-
-`dot` defaults to `true` so important files such as `.github`, `.npmrc`, and tool configuration are not silently omitted. Potential secret files such as `.env`, private keys, and `.npmrc` produce a warning by default. Set `sensitiveFiles` to `error` or `allow` to change that behavior.
-
-## Snapshot and patch archives
-
-A snapshot ZIP stores all selected files:
-
-```text
-project.zip
-├── src/...
-├── package.json
-├── .packagemanifest.json
-└── .packageshift        # only when shiftFile exists
-```
-
-A shift ZIP stores only added and modified payload files, plus structural operations:
-
-```text
-update.zip
-├── changed/files/...
-├── .packagemanifest.json
-└── .packageshift
-```
-
-Manually created .packageshift archives may omit the manifest:
-
-```text
-manual-update.zip
-├── changed/files/...
-└── .packageshift
-```
-
-`check`, `inspect`, `list`, `diff`, and `apply` accept this form. The CLI generates temporary payload metadata from the ZIP entries and validates ZIP CRCs plus the `.packageshift` syntax. Because there is no embedded manifest, base-project verification is unavailable and `diff`/`apply` print a warning. The legacy JSON path `.packagemanifest` is also accepted when present.
-
-Exact renames are detected by matching SHA-256 hashes. Ambiguous fuzzy renames are not applied automatically.
-
-## `.packageshift`
-
-`.packageshift` describes file-system operations that archive contents alone cannot express. During `package zip`, the configured `shiftFile` is parsed before the ZIP is written and stored under the canonical archive path `.packageshift`:
-
-```text
-PACKAGESHIFT 1
-
-MESSAGE "Rename the API client and remove obsolete code"
-BASE sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-
-REMOVE "src/api/unused.ts" IF sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-MOVE "src/api/old.ts" TO "src/api/new.ts" IF sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-COPY "src/config/default.ts" TO "src/config/production.ts"
-REPLACE "src/index.ts" IF sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-CHMOD "scripts/deploy.sh" 755
-```
-
-Paths must be relative to the project root and use forward slashes. Absolute paths and `..` segments are rejected.
-
-See [docs/PACKAGESHIFT.md](docs/PACKAGESHIFT.md) for the compact format reference.
+See the [configuration schema](docs/schema.json) and
+[`.packageshift` format reference](docs/PACKAGESHIFT.md) for full details.
 
 ## Development
 
+Install dependencies and run the TypeScript source directly:
+
 ```bash
 npm install
+npm run dev -- zip
+```
+
+Validate the project, run tests, and build the production CLI:
+
+```bash
 npm run check
+```
+
+Useful individual commands:
+
+```bash
+npm run typecheck
+npm test
 npm run build
+npm start -- zip
+```
+
+TypeScript is compiled into `dist/`. The `bin` entry in `package.json` points to
+`dist/bin/package.js`, so package users only need Node.js, not TypeScript or
+runtime npm dependencies.
+
+## Test the npm package locally
+
+To test the exact package contents, create a tarball and run it in another
+project:
+
+```bash
+npm pack
+npx --yes --package=/absolute/path/to/streetraceing-package-<version>.tgz package --help
+```
+
+Inspect the files that would be published without creating the tarball:
+
+```bash
 npm run pack:check
 ```
 
-The published package contains compiled JavaScript in `dist/`; end users do not need TypeScript or any runtime npm dependency.
+The published package contains the compiled CLI and supporting modules, schema,
+documentation, README, and license. Tests and `node_modules` are excluded.
 
-## Current limits
+## MVP limitations
 
 - ZIP64 and multi-disk ZIP archives are not supported.
-- ZIP entries must be smaller than 1 GiB; expanded archives are limited to 4 GiB.
-- Rename generation is intentionally limited to exact-content matches.
-- Snapshot application is an overlay. Files absent from a snapshot are not removed unless `.packageshift` explicitly removes them.
-- The fallback ignore walker covers common Git ignore behavior; Git itself remains the authoritative strategy for complex repositories.
+- ZIP entries are limited to 1 GiB and expanded archives to 4 GiB.
+- Generated rename detection only matches identical file content.
+- Applying a snapshot is an overlay; files absent from it are not removed unless
+  `.packageshift` explicitly removes them.
+- Manually assembled `.packageshift` archives without a manifest cannot verify
+  the base project before applying.
+- The fallback file walker covers common Git-ignore behavior; Git remains the
+  authoritative collection strategy for complex repositories.
+
+## About
+
+Project source archiver and safe update-package CLI.
+
+<https://streetraceing.github.io/package>
 
 ## License
 
-MIT
+[MIT](./LICENSE) © Package contributors.
