@@ -4,6 +4,7 @@ export type ConflictStrategy = 'abort' | 'overwrite' | 'skip';
 export type SensitiveFilesMode = 'warn' | 'error' | 'allow';
 
 export interface PackageConfig {
+  $schema?: string;
   type: ArchiveType;
   root: string;
   output: string;

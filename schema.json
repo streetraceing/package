@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://streetraceing.github.io/package/schema.json",
+  "title": "@streetraceing/package configuration",
+  "description": "Configuration for the @streetraceing/package CLI. Store this object in .packagerc or .packagerc.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "const": "https://streetraceing.github.io/package/schema.json",
+      "default": "https://streetraceing.github.io/package/schema.json",
+      "description": "Enables editor completion and validation for .packagerc."
+    },
+    "type": {
+      "type": "string",
+      "enum": ["zip"],
+      "default": "zip",
+      "description": "Archive format to create."
+    },
+    "root": {
+      "type": "string",
+      "minLength": 1,
+      "default": ".",
+      "description": "Project root, resolved relative to the directory containing the configuration file."
+    },
+    "output": {
+      "type": "string",
+      "minLength": 1,
+      "default": ".",
+      "description": "Output directory, resolved relative to the project root."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "default": "{folder}.zip",
+      "description": "Default archive filename. The {folder} token is replaced with the project root folder name."
+    },
+    "strategy": {
+      "type": "string",
+      "enum": ["git", "walk"],
+      "default": "git",
+      "description": "File collection strategy. The git strategy uses git ls-files when possible and falls back to the internal walker."
+    },
+    "gitignore": {
+      "type": "boolean",
+      "default": true,
+      "description": "Respect .gitignore rules and standard Git exclusions."
+    },
+    "npmignore": {
+      "type": "boolean",
+      "default": false,
+      "description": "Also apply .npmignore rules while collecting files."
+    },
+    "include": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": ["**/*"],
+      "description": "Glob patterns that select files eligible for packaging."
+    },
+    "ignore": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": [],
+      "description": "Additional glob patterns to exclude after standard ignore processing."
+    },
+    "dot": {
+      "type": "boolean",
+      "default": true,
+      "description": "Include dotfiles such as .github and .npmrc unless another rule excludes them."
+    },
+    "followSymlinks": {
+      "type": "boolean",
+      "default": false,
+      "description": "Follow symbolic links while walking the project. Disabled by default for safety."
+    },
+    "includeEmptyDirectories": {
+      "type": "boolean",
+      "default": false,
+      "description": "Include empty directory entries in generated archives."
+    },
+    "manifest": {
+      "type": "boolean",
+      "default": true,
+      "description": "Write .packagemanifest.json with file metadata and SHA-256 hashes."
+    },
+    "shiftFile": {
+      "type": "string",
+      "minLength": 1,
+      "default": ".packageshift",
+      "description": "Filename used for PackageShift structural instructions inside update archives."
+    },
+    "compressionLevel": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9,
+      "default": 9,
+      "description": "ZIP deflate compression level. Use 0 to store files without compression."
+    },
+    "deterministic": {
+      "type": "boolean",
+      "default": true,
+      "description": "Use stable ordering and normalized metadata to produce reproducible archives."
+    },
+    "preserveMode": {
+      "type": "boolean",
+      "default": true,
+      "description": "Preserve Unix file permission modes in the archive manifest."
+    },
+    "preserveMtime": {
+      "type": "boolean",
+      "default": false,
+      "description": "Preserve source modification times instead of normalized deterministic timestamps."
+    },
+    "sensitiveFiles": {
+      "type": "string",
+      "enum": ["warn", "error", "allow"],
+      "default": "warn",
+      "description": "Behavior when potentially sensitive files such as .env or private keys are selected."
+    },
+    "backupOnApply": {
+      "type": "boolean",
+      "default": true,
+      "description": "Create a rollback archive in .package-backups before applying changes."
+    },
+    "conflictStrategy": {
+      "type": "string",
+      "enum": ["abort", "overwrite", "skip"],
+      "default": "abort",
+      "description": "Default behavior when local files conflict with an update package."
+    },
+    "renameDetection": {
+      "type": "boolean",
+      "default": true,
+      "description": "Detect exact renames by matching hashes while creating shift archives."
+    },
+    "renameThreshold": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0.8,
+      "description": "Reserved similarity threshold for approximate rename detection."
+    }
+  },
+  "examples": [
+    {
+      "$schema": "https://streetraceing.github.io/package/schema.json",
+      "type": "zip",
+      "output": ".",
+      "name": "{folder}.zip",
+      "strategy": "git",
+      "gitignore": true,
+      "include": ["**/*"],
+      "ignore": ["dist/**", "coverage/**"],
+      "dot": true,
+      "compressionLevel": 9,
+      "deterministic": true,
+      "backupOnApply": true,
+      "conflictStrategy": "abort"
+    }
+  ]
+}

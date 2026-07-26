@@ -10,6 +10,7 @@
     "package": "./dist/bin/package.js"
   },
   "files": [
+    "schema.json",
     "dist/bin",
     "dist/src",
     "docs",
@@ -18,7 +19,7 @@
   ],
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build": "npm run clean && tsc -p tsconfig.build.json && node -e \"require('node:fs').chmodSync('dist/bin/package.js', 0o755)\"",
+    "build": "npm run sync:schema && npm run clean && tsc -p tsconfig.build.json && node -e \"require('node:fs').chmodSync('dist/bin/package.js', 0o755)\"",
     "dev": "tsx ./bin/package.ts",
     "start": "node ./dist/bin/package.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -28,11 +29,12 @@
     "check": "npm run typecheck && npm test && npm run build",
     "pack:check": "npm pack --dry-run",
     "prepublishOnly": "npm run check && npm run pack:check",
-    "prepare": "husky",
+    "prepare": "npm run build",
     "npm:patch": "npm version patch",
     "npm:minor": "npm version minor",
     "npm:major": "npm version major",
-    "npm:publish": "npm publish --access public"
+    "npm:publish": "npm publish --access public",
+    "sync:schema": "node -e \"require('node:fs').copyFileSync('schema.json', 'docs/schema.json')\""
   },
   "engines": {
     "node": ">=18"
@@ -49,11 +51,9 @@
   ],
   "devDependencies": {
     "@types/node": "^22.15.0",
-    "husky": "^9.1.7",
-    "lint-staged": "^17.2.0",
-    "prettier": "3.9.6",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "homepage": "https://streetraceing.github.io/package"
 }

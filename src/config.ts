@@ -3,6 +3,9 @@ import { readFile } from 'node:fs/promises';
 import { PackageError } from './errors.js';
 import type { PackageConfig } from './types.js';
 
+export const documentationUrl = 'https://streetraceing.github.io/package';
+export const configSchemaUrl = `${documentationUrl}/schema.json`;
+
 export const defaultConfig: PackageConfig = {
   type: 'zip',
   root: '.',
@@ -99,20 +102,141 @@ function validateConfig(
       'CONFIG_INVALID',
     );
   }
+
   const config = value as Record<string, unknown>;
+  const knownKeys = new Set([
+    '$schema',
+    'type',
+    'root',
+    'output',
+    'name',
+    'strategy',
+    'gitignore',
+    'npmignore',
+    'include',
+    'ignore',
+    'dot',
+    'followSymlinks',
+    'includeEmptyDirectories',
+    'manifest',
+    'shiftFile',
+    'compressionLevel',
+    'deterministic',
+    'preserveMode',
+    'preserveMtime',
+    'sensitiveFiles',
+    'backupOnApply',
+    'conflictStrategy',
+    'renameDetection',
+    'renameThreshold',
+  ]);
+
+  for (const key of Object.keys(config)) {
+    if (!knownKeys.has(key)) {
+      throw new PackageError(
+        `${sourceName}: unknown option ${JSON.stringify(key)}.`,
+        'CONFIG_INVALID',
+      );
+    }
+  }
+
+  if (config.$schema !== undefined && config.$schema !== configSchemaUrl) {
+    throw new PackageError(
+      `${sourceName}: $schema must be ${configSchemaUrl}.`,
+      'CONFIG_INVALID',
+    );
+  }
+
+  const stringKeys = ['root', 'output', 'name', 'shiftFile'] as const;
+  for (const key of stringKeys) {
+    if (
+      config[key] !== undefined &&
+      (typeof config[key] !== 'string' || config[key].length === 0)
+    ) {
+      throw new PackageError(
+        `${sourceName}: ${key} must be a non-empty string.`,
+        'CONFIG_INVALID',
+      );
+    }
+  }
+
+  const booleanKeys = [
+    'gitignore',
+    'npmignore',
+    'dot',
+    'followSymlinks',
+    'includeEmptyDirectories',
+    'manifest',
+    'deterministic',
+    'preserveMode',
+    'preserveMtime',
+    'backupOnApply',
+    'renameDetection',
+  ] as const;
+  for (const key of booleanKeys) {
+    if (config[key] !== undefined && typeof config[key] !== 'boolean') {
+      throw new PackageError(
+        `${sourceName}: ${key} must be a boolean.`,
+        'CONFIG_INVALID',
+      );
+    }
+  }
+
   const arrayKeys = ['include', 'ignore'] as const;
   for (const key of arrayKeys) {
     if (
       config[key] !== undefined &&
       (!Array.isArray(config[key]) ||
-        !(config[key] as unknown[]).every((item) => typeof item === 'string'))
+        !(config[key] as unknown[]).every(
+          (item) => typeof item === 'string' && item.length > 0,
+        ))
     ) {
       throw new PackageError(
-        `${sourceName}: ${key} must be an array of strings.`,
+        `${sourceName}: ${key} must be an array of non-empty strings.`,
         'CONFIG_INVALID',
       );
     }
   }
+
+  if (config.type !== undefined && config.type !== 'zip') {
+    throw new PackageError(
+      `${sourceName}: type must be zip.`,
+      'CONFIG_INVALID',
+    );
+  }
+  if (
+    config.strategy !== undefined &&
+    config.strategy !== 'git' &&
+    config.strategy !== 'walk'
+  ) {
+    throw new PackageError(
+      `${sourceName}: strategy must be git or walk.`,
+      'CONFIG_INVALID',
+    );
+  }
+  if (
+    config.sensitiveFiles !== undefined &&
+    config.sensitiveFiles !== 'warn' &&
+    config.sensitiveFiles !== 'error' &&
+    config.sensitiveFiles !== 'allow'
+  ) {
+    throw new PackageError(
+      `${sourceName}: sensitiveFiles must be warn, error, or allow.`,
+      'CONFIG_INVALID',
+    );
+  }
+  if (
+    config.conflictStrategy !== undefined &&
+    config.conflictStrategy !== 'abort' &&
+    config.conflictStrategy !== 'overwrite' &&
+    config.conflictStrategy !== 'skip'
+  ) {
+    throw new PackageError(
+      `${sourceName}: conflictStrategy must be abort, overwrite, or skip.`,
+      'CONFIG_INVALID',
+    );
+  }
+
   if (config.compressionLevel !== undefined) {
     const level = Number(config.compressionLevel);
     if (!Number.isInteger(level) || level < 0 || level > 9) {
@@ -164,6 +288,8 @@ export function resolveConfigPaths(
 }
 
 export const exampleConfig = `{
+  "$schema": "${configSchemaUrl}",
+
   // Archive settings
   type: "zip",
   output: ".",

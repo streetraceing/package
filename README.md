@@ -4,6 +4,8 @@ A dependency-free TypeScript CLI for creating clean project ZIP archives, compar
 
 Requires Node.js 18 or later.
 
+Documentation: https://streetraceing.github.io/package
+
 ## Use
 
 Run without installing:
@@ -140,10 +142,12 @@ Run this command to create `.packagerc`:
 package init
 ```
 
-The file accepts JSON and practical JSON5-style syntax: comments, unquoted keys, single-quoted strings, and trailing commas.
+The generated file includes the JSON Schema URL `https://streetraceing.github.io/package/schema.json` for editor completion and validation. It accepts JSON and practical JSON5-style syntax: comments, unquoted keys, single-quoted strings, and trailing commas.
 
 ```json5
 {
+  $schema: 'https://streetraceing.github.io/package/schema.json',
+
   type: 'zip',
   root: '.',
   output: '.',
