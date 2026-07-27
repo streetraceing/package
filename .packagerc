@@ -21,10 +21,10 @@
   "preserveMode": true,
   "preserveMtime": false,
   "sensitiveFiles": "warn",
-  "backupOnApply": false,
   "conflictStrategy": "abort",
   "renameDetection": true,
   "renameThreshold": 0.8,
+  "backupOnApply": true,
   "afterApply": [
     "npm install",
     "npm run prettier:write",
