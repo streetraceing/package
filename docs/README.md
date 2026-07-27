@@ -49,18 +49,21 @@ Run `npx @streetraceing/package --help` for the complete command reference.
 {
   "beforePackage": ["npm run build"],
   "afterPackage": ["node scripts/report-package.mjs"],
+  "beforeApply": [],
+  "afterApply": ["npm run prepare"],
   "deletePackageOnApply": false
 }
 ```
 
-- `beforePackage` runs sequential shell commands before file collection for
-  `zip` and `shift`.
-- `afterPackage` runs sequential shell commands after the archive is written.
-- `deletePackageOnApply` removes the source archive only after a successful
-  non-dry-run apply. It is `false` by default.
+- `beforePackage` runs before file collection for `zip` and `shift`.
+- `afterPackage` runs after the archive is written.
+- `beforeApply` runs after validation and confirmation, before files change.
+- `afterApply` runs after a successful apply and before archive deletion.
+- `deletePackageOnApply` removes the source archive only after apply and
+  `afterApply` complete successfully. It is `false` by default.
 
-Hook commands run from the project root and receive `PACKAGE_HOOK`,
-`PACKAGE_COMMAND`, `PACKAGE_ROOT`, and `PACKAGE_ARCHIVE`.
+Hook commands run sequentially from the project root and receive
+`PACKAGE_HOOK`, `PACKAGE_COMMAND`, `PACKAGE_ROOT`, and `PACKAGE_ARCHIVE`.
 
 ## Principles
 

@@ -32,6 +32,8 @@ export const defaultConfig: PackageConfig = {
   renameThreshold: 0.8,
   beforePackage: [],
   afterPackage: [],
+  beforeApply: [],
+  afterApply: [],
   deletePackageOnApply: false,
 };
 
@@ -86,6 +88,8 @@ function validateConfig(
     'renameThreshold',
     'beforePackage',
     'afterPackage',
+    'beforeApply',
+    'afterApply',
     'deletePackageOnApply',
   ]);
 
@@ -157,7 +161,12 @@ function validateConfig(
     }
   }
 
-  const hookKeys = ['beforePackage', 'afterPackage'] as const;
+  const hookKeys = [
+    'beforePackage',
+    'afterPackage',
+    'beforeApply',
+    'afterApply',
+  ] as const;
   for (const key of hookKeys) {
     const value = config[key];
     if (value === undefined) continue;

@@ -30,6 +30,8 @@ export interface PackageConfig {
   renameThreshold: number;
   beforePackage: string[];
   afterPackage: string[];
+  beforeApply: string[];
+  afterApply: string[];
   deletePackageOnApply: boolean;
 }
 
@@ -135,5 +137,7 @@ export interface ApplyOptions {
   force: boolean;
   backup: boolean;
   conflictStrategy: ConflictStrategy;
+  beforeApply?: string[];
+  afterApply?: string[];
   deletePackageOnApply?: boolean;
 }

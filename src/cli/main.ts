@@ -98,6 +98,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       force: args.force,
       backup: args.backup ?? config.backupOnApply,
       conflictStrategy: args.conflictStrategy ?? config.conflictStrategy,
+      beforeApply: config.beforeApply,
+      afterApply: config.afterApply,
       deletePackageOnApply:
         args.deletePackageOnApply ?? config.deletePackageOnApply,
     });

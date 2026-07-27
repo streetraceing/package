@@ -3,7 +3,7 @@
   "$id": "https://streetraceing.github.io/package/schema.json",
   "title": "@streetraceing/package configuration",
   "description": "Strict JSON configuration for the @streetraceing/package CLI. Store this object in .packagerc or .packagerc.json.",
-  "markdownDescription": "Strict JSON configuration for `@streetraceing/package`. Store the object in `.packagerc` or `.packagerc.json`.\n\nAll options have conservative defaults: package hooks are disabled, apply keeps the source archive, conflicts abort, and symbolic links are not followed.",
+  "markdownDescription": "Strict JSON configuration for `@streetraceing/package`. Store the object in `.packagerc` or `.packagerc.json`.\n\nAll options have conservative defaults: package and apply hooks are disabled, apply keeps the source archive, conflicts abort, and symbolic links are not followed.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -227,6 +227,48 @@
         }
       ]
     },
+    "beforeApply": {
+      "default": [],
+      "description": "Shell commands executed before applying archive changes.",
+      "markdownDescription": "Commands run sequentially from `root` after archive validation, conflict handling, and user confirmation, but before the first project file is changed. An empty array preserves current behavior. A non-zero exit stops apply before package changes are written. The hook is not run for `--dry-run`.\n\n`\"npm run preapply\"` - Run one command.\n\n`[\"npm run validate\", \"npm run migrate\"]` - Run multiple commands in order.\n\nAvailable environment variables:\n\n`PACKAGE_HOOK` - `beforeApply`\n\n`PACKAGE_COMMAND` - `apply`\n\n`PACKAGE_ROOT` - Absolute target project root\n\n`PACKAGE_ARCHIVE` - Absolute source archive path",
+      "examples": [
+        [],
+        "npm run preapply",
+        ["npm run validate", "npm run migrate"]
+      ],
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ]
+    },
+    "afterApply": {
+      "default": [],
+      "description": "Shell commands executed after archive changes are applied successfully.",
+      "markdownDescription": "Commands run sequentially from `root` only after all package changes are applied successfully. They run before `deletePackageOnApply`, so a failing command retains the source archive. An empty array preserves current behavior. The hook is not run for `--dry-run`, cancelled apply, validation failure, conflict abort, or rollback.\n\n`\"npm run prepare\"` - Run one command.\n\n`[\"npm install\", \"npm run build\"]` - Run multiple commands in order.\n\nAvailable environment variables:\n\n`PACKAGE_HOOK` - `afterApply`\n\n`PACKAGE_COMMAND` - `apply`\n\n`PACKAGE_ROOT` - Absolute target project root\n\n`PACKAGE_ARCHIVE` - Absolute source archive path",
+      "examples": [[], "npm run prepare", ["npm install", "npm run build"]],
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ]
+    },
     "deletePackageOnApply": {
       "type": "boolean",
       "default": false,
@@ -249,6 +291,8 @@
       "dot": true,
       "beforePackage": [],
       "afterPackage": [],
+      "beforeApply": [],
+      "afterApply": [],
       "deletePackageOnApply": false,
       "compressionLevel": 9,
       "deterministic": true,

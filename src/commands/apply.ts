@@ -5,6 +5,7 @@ import type { ApplyOptions } from '../types.js';
 import { applyPackage } from '../apply/transaction.js';
 import { comparePackageToProject } from './compare.js';
 import { formatChanges } from './diff.js';
+import { runPackageHooks } from '../util/hooks.js';
 
 export async function applyCommand(
   archivePath: string,
@@ -43,6 +44,13 @@ export async function applyCommand(
     );
   if (result.skippedPaths.length > 0)
     console.log(`Skipped conflicts: ${result.skippedPaths.join(', ')}`);
+  if (!options.dryRun) {
+    await runPackageHooks('afterApply', options.afterApply ?? [], {
+      root: path.resolve(options.cwd),
+      archivePath: resolvedArchive,
+      command: 'apply',
+    });
+  }
   if (!options.dryRun && options.deletePackageOnApply) {
     try {
       await rm(resolvedArchive, { force: true });

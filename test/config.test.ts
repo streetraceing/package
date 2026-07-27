@@ -37,6 +37,8 @@ test('package init creates a schema-enabled .packagerc', async () => {
     assert.equal(parsed.renameThreshold, defaultConfig.renameThreshold);
     assert.deepEqual(parsed.beforePackage, []);
     assert.deepEqual(parsed.afterPackage, []);
+    assert.deepEqual(parsed.beforeApply, []);
+    assert.deepEqual(parsed.afterApply, []);
     assert.equal(parsed.deletePackageOnApply, false);
 
     const loaded = await loadConfig(workspace);
@@ -134,6 +136,8 @@ test('configuration validates package hooks and apply cleanup settings', async (
         {
           beforePackage: 'npm run build',
           afterPackage: ['node scripts/report.mjs'],
+          beforeApply: 'npm run migrate',
+          afterApply: ['npm run prepare'],
           deletePackageOnApply: true,
         },
         null,
@@ -144,6 +148,8 @@ test('configuration validates package hooks and apply cleanup settings', async (
     const loaded = await loadConfig(workspace);
     assert.deepEqual(loaded.config.beforePackage, ['npm run build']);
     assert.deepEqual(loaded.config.afterPackage, ['node scripts/report.mjs']);
+    assert.deepEqual(loaded.config.beforeApply, ['npm run migrate']);
+    assert.deepEqual(loaded.config.afterApply, ['npm run prepare']);
     assert.equal(loaded.config.deletePackageOnApply, true);
 
     await writeFile(

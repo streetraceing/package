@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process';
 import { PackageError } from '../errors.js';
 
-export type PackageHookName = 'beforePackage' | 'afterPackage';
-export type PackageCommandName = 'zip' | 'shift';
+export type PackageHookName =
+  'beforePackage' | 'afterPackage' | 'beforeApply' | 'afterApply';
+export type PackageCommandName = 'zip' | 'shift' | 'apply';
 
 export interface PackageHookContext {
   root: string;
@@ -49,7 +50,9 @@ function runShellCommand(
       const retained =
         hook === 'afterPackage'
           ? ` The created archive was retained at ${context.archivePath}.`
-          : '';
+          : hook === 'afterApply'
+            ? ` Applied changes were retained. The source archive was retained at ${context.archivePath}.`
+            : '';
       reject(
         new PackageError(
           `${hook} script failed with ${status}: ${script}.${retained}`,

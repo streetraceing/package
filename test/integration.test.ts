@@ -544,3 +544,94 @@ test('deletes the source archive only after successful non-dry-run apply', async
     await rm(workspace, { recursive: true, force: true });
   }
 });
+
+test('runs beforeApply and afterApply around successful apply', async () => {
+  const workspace = await mkdtemp(path.join(tmpdir(), 'package-apply-hooks-'));
+  const source = path.join(workspace, 'source-project');
+  const target = path.join(workspace, 'target-project');
+  try {
+    await mkdir(source, { recursive: true });
+    await mkdir(target, { recursive: true });
+    await write(source, 'src/index.ts', 'export const value = "new";\n');
+    await write(target, 'src/index.ts', 'export const value = "old";\n');
+    await write(
+      target,
+      'scripts/apply-hook.cjs',
+      [
+        "const fs = require('node:fs');",
+        "const path = require('node:path');",
+        "const source = path.join(process.cwd(), 'src/index.ts');",
+        "const log = path.join(process.cwd(), 'apply-hooks.jsonl');",
+        'const entry = {',
+        '  hook: process.env.PACKAGE_HOOK,',
+        '  command: process.env.PACKAGE_COMMAND,',
+        '  root: process.env.PACKAGE_ROOT,',
+        '  archive: process.env.PACKAGE_ARCHIVE,',
+        '  archiveExists: fs.existsSync(process.env.PACKAGE_ARCHIVE),',
+        "  content: fs.readFileSync(source, 'utf8'),",
+        '};',
+        "fs.appendFileSync(log, JSON.stringify(entry) + '\\n');",
+        '',
+      ].join('\n'),
+    );
+
+    const config = {
+      ...defaultConfig,
+      root: source,
+      output: workspace,
+      strategy: 'walk' as const,
+    };
+    const archive = await createSnapshot(config, {
+      output: '../apply-hooks.zip',
+      quiet: true,
+    });
+    const hookScripts = ['node scripts/apply-hook.cjs'];
+
+    await applyCommand(archive, {
+      cwd: target,
+      dryRun: true,
+      yes: true,
+      force: false,
+      backup: false,
+      conflictStrategy: 'overwrite',
+      beforeApply: hookScripts,
+      afterApply: hookScripts,
+      deletePackageOnApply: false,
+    });
+    await assert.rejects(
+      readFile(path.join(target, 'apply-hooks.jsonl'), 'utf8'),
+      /ENOENT/,
+    );
+
+    await applyCommand(archive, {
+      cwd: target,
+      dryRun: false,
+      yes: true,
+      force: false,
+      backup: false,
+      conflictStrategy: 'overwrite',
+      beforeApply: hookScripts,
+      afterApply: hookScripts,
+      deletePackageOnApply: true,
+    });
+
+    const entries = (
+      await readFile(path.join(target, 'apply-hooks.jsonl'), 'utf8')
+    )
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    assert.equal(entries.length, 2);
+    assert.deepEqual(
+      entries.map((entry) => entry.hook),
+      ['beforeApply', 'afterApply'],
+    );
+    assert.ok(entries.every((entry) => entry.command === 'apply'));
+    assert.equal(entries[0]?.content, 'export const value = "old";\n');
+    assert.equal(entries[1]?.content, 'export const value = "new";\n');
+    assert.ok(entries.every((entry) => entry.archiveExists === true));
+    await assert.rejects(readFile(archive), /ENOENT/);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});

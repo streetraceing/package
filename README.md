@@ -81,16 +81,19 @@ Package lifecycle hooks and archive cleanup are opt-in:
 {
   "beforePackage": ["npm run build"],
   "afterPackage": ["node scripts/report-package.mjs"],
+  "beforeApply": [],
+  "afterApply": ["npm run prepare"],
   "deletePackageOnApply": false
 }
 ```
 
-`beforePackage` and `afterPackage` commands run sequentially from the project
-root for both `zip` and `shift`. They receive `PACKAGE_HOOK`,
-`PACKAGE_COMMAND`, `PACKAGE_ROOT`, and `PACKAGE_ARCHIVE` environment variables.
-The default empty arrays run nothing. `deletePackageOnApply` defaults to
-`false`; when enabled, the source ZIP is deleted only after a completely
-successful non-dry-run apply.
+`beforePackage` and `afterPackage` run around `zip` and `shift`. `beforeApply`
+runs after validation and confirmation but before files are changed; `afterApply`
+runs only after a successful apply and before optional archive deletion. Hooks
+run sequentially from the project root and receive `PACKAGE_HOOK`,
+`PACKAGE_COMMAND`, `PACKAGE_ROOT`, and `PACKAGE_ARCHIVE`. Empty arrays run
+nothing. `deletePackageOnApply` defaults to `false`; when enabled, the source ZIP
+is deleted only after apply and `afterApply` complete successfully.
 
 See the [configuration schema](docs/schema.json) and
 [`.packageshift` format reference](docs/PACKAGESHIFT.md) for full details.

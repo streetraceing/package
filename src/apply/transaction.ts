@@ -26,6 +26,7 @@ import {
   rootHashForFiles,
 } from '../manifest/state.js';
 import { writeZip } from '../archive/zip.js';
+import { runPackageHooks } from '../util/hooks.js';
 
 interface BackupItem {
   path: string;
@@ -421,6 +422,12 @@ export async function applyPackage(
     };
   if (!(await shouldProceed(options, activePaths.length)))
     throw new PackageError('Apply cancelled.', 'APPLY_CANCELLED');
+
+  await runPackageHooks('beforeApply', options.beforeApply ?? [], {
+    root: options.cwd,
+    archivePath: pkg.archivePath,
+    command: 'apply',
+  });
 
   const backup = await captureBackup(options.cwd, activePaths);
   const backupPath = options.backup
