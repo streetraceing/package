@@ -148,6 +148,10 @@ export async function createShiftArchive(
     base.manifest.rootHash,
     base.manifest.files,
   );
+  manifest.sourcePackage = {
+    name: path.basename(resolvedBaseArchive),
+    sha256: await sha256File(resolvedBaseArchive),
+  };
   const entries: ArchiveEntry[] = manifest.files.map((file) => ({
     path: file.path,
     data: data.get(file.path) as Buffer,

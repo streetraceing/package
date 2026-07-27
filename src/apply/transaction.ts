@@ -13,7 +13,6 @@ import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import type {
   ApplyOptions,
-  ArchiveEntry,
   ConflictStrategy,
   LoadedPackage,
   ShiftInstruction,
@@ -25,15 +24,8 @@ import {
   readCurrentManifestFiles,
   rootHashForFiles,
 } from '../manifest/state.js';
-import { writeZip } from '../archive/zip.js';
 import { runPackageHooks } from '../util/hooks.js';
-
-interface BackupItem {
-  path: string;
-  existed: boolean;
-  data?: Buffer;
-  mode?: number;
-}
+import { captureBackup, persistBackup, restoreBackupItems } from './backups.js';
 
 async function existingFile(
   root: string,
@@ -177,77 +169,6 @@ async function chooseConflictStrategy(
     return 'abort';
   } finally {
     readline.close();
-  }
-}
-
-async function captureBackup(
-  root: string,
-  paths: string[],
-): Promise<BackupItem[]> {
-  const backup: BackupItem[] = [];
-  for (const relativePath of paths) {
-    const current = await existingFile(root, relativePath);
-    backup.push(
-      current
-        ? {
-            path: relativePath,
-            existed: true,
-            data: current.data,
-            mode: current.mode,
-          }
-        : { path: relativePath, existed: false },
-    );
-  }
-  return backup;
-}
-
-async function persistBackup(
-  root: string,
-  backup: BackupItem[],
-): Promise<string> {
-  const date = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupPath = path.join(root, '.package-backups', `${date}.zip`);
-  await mkdir(path.dirname(backupPath), { recursive: true });
-  const metadata = backup.map(({ path: itemPath, existed, mode }) => ({
-    path: itemPath,
-    existed,
-    mode,
-  }));
-  const entries: ArchiveEntry[] = backup
-    .filter(
-      (item): item is BackupItem & { data: Buffer } =>
-        item.existed && item.data !== undefined,
-    )
-    .map((item) => ({
-      path: item.path,
-      data: item.data,
-      mode: item.mode ?? 0o644,
-    }));
-  entries.push({
-    path: '.packagebackup.json',
-    data: Buffer.from(`${JSON.stringify(metadata, null, 2)}\n`, 'utf8'),
-    mode: 0o600,
-  });
-  await writeZip(backupPath, entries, {
-    compressionLevel: 9,
-    deterministic: false,
-  });
-  return backupPath;
-}
-
-async function restoreBackup(
-  root: string,
-  backup: BackupItem[],
-): Promise<void> {
-  for (const item of [...backup].reverse()) {
-    const absolutePath = resolveInside(root, item.path);
-    if (!item.existed) {
-      await rm(absolutePath, { force: true, recursive: true });
-      continue;
-    }
-    await mkdir(path.dirname(absolutePath), { recursive: true });
-    await writeFile(absolutePath, item.data as Buffer);
-    await chmod(absolutePath, item.mode ?? 0o644);
   }
 }
 
@@ -431,7 +352,10 @@ export async function applyPackage(
 
   const backup = await captureBackup(options.cwd, activePaths);
   const backupPath = options.backup
-    ? await persistBackup(options.cwd, backup)
+    ? await persistBackup(options.cwd, backup, {
+        kind: 'apply',
+        sourceArchivePath: pkg.archivePath,
+      })
     : undefined;
   try {
     for (const instruction of pkg.shift?.instructions ?? []) {
@@ -451,7 +375,8 @@ export async function applyPackage(
       await chmod(destination, file.mode & 0o777);
     }
   } catch (error) {
-    await restoreBackup(options.cwd, backup);
+    await restoreBackupItems(options.cwd, backup);
+    if (backupPath) await rm(backupPath, { force: true });
     throw new PackageError(
       `Apply failed and changes were rolled back: ${(error as Error).message}`,
       'APPLY_ROLLBACK',

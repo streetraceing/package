@@ -51,6 +51,23 @@ function validateManifest(value: unknown, sourcePath: string): PackageManifest {
       'MANIFEST_INVALID',
     );
   }
+  if (manifest.sourcePackage !== undefined) {
+    const source = manifest.sourcePackage;
+    if (
+      !source ||
+      typeof source !== 'object' ||
+      typeof source.name !== 'string' ||
+      source.name.length === 0 ||
+      source.name !== path.basename(source.name) ||
+      typeof source.sha256 !== 'string' ||
+      !/^sha256:[0-9a-f]{64}$/i.test(source.sha256)
+    ) {
+      throw new PackageError(
+        `${sourcePath} contains invalid source package metadata.`,
+        'MANIFEST_INVALID',
+      );
+    }
+  }
   for (const file of manifest.files) {
     if (
       !file ||

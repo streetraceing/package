@@ -33,6 +33,7 @@ export interface PackageConfig {
   beforeApply: string[];
   afterApply: string[];
   deletePackageOnApply: boolean;
+  deleteSourcePackageOnApply: boolean;
 }
 
 export interface ManifestFile {
@@ -40,6 +41,11 @@ export interface ManifestFile {
   size: number;
   mode: number;
   mtime?: string;
+  sha256: string;
+}
+
+export interface SourcePackageReference {
+  name: string;
   sha256: string;
 }
 
@@ -51,6 +57,7 @@ export interface PackageManifest {
   rootHash: string;
   baseRootHash?: string;
   baseFiles?: ManifestFile[];
+  sourcePackage?: SourcePackageReference;
   config: Pick<PackageConfig, 'strategy' | 'gitignore' | 'npmignore' | 'dot'>;
   files: ManifestFile[];
 }
@@ -140,4 +147,5 @@ export interface ApplyOptions {
   beforeApply?: string[];
   afterApply?: string[];
   deletePackageOnApply?: boolean;
+  deleteSourcePackageOnApply?: boolean;
 }

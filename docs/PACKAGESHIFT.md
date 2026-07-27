@@ -78,3 +78,15 @@ package apply update.zip --dry-run
 ```
 
 Parser errors include the source line, column, error code, failing line, and a correction hint.
+
+## Source snapshot cleanup
+
+Shift archives created by `package shift` record the source snapshot filename and
+SHA-256 in `.packagemanifest.json`. This metadata is separate from the
+`.packageshift` instruction language.
+
+When `deleteSourcePackageOnApply` or `--delete-source-package` is enabled,
+Package searches for that snapshot beside the applied update archive and in the
+target project root. It deletes only a regular file whose filename and SHA-256
+both match the recorded source. The default is `false`; symlinks, mismatches,
+missing snapshots, dry runs, and failed applies are retained.

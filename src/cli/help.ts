@@ -6,6 +6,9 @@ Usage:
   package shift <base.zip> [options]
   package diff <archive.zip> [options]
   package apply <archive.zip> [options]
+  package backup [list]
+  package backup inspect <version> [--json]
+  package backup restore <version|latest> [--yes]
   package inspect <archive.zip> [--json]
   package check <archive.zip>
   package list [archive.zip] [--json]
@@ -37,10 +40,21 @@ Apply options:
   --dry-run                   Validate and preview without writing
   -y, --yes                   Skip interactive confirmation
   -f, --force                 Ignore base/hash conflicts
-  --[no-]backup               Keep or disable a persistent backup
-  --delete-package            Delete the archive after a successful apply
-  --keep-package              Keep the archive after apply (default)
+  --[no-]backup               Keep or disable a versioned backup
+  --delete-package            Delete the applied archive after success
+  --keep-package              Keep the applied archive (default)
+  --delete-source-package     Delete the exact source snapshot referenced by a shift archive
+  --keep-source-package       Keep the source snapshot (default)
   --conflict <strategy>       Handle local/hash conflicts: abort, overwrite, or skip
+
+Backup commands:
+  package backup list         Show all versions for the current project
+  package backup inspect 1    Show metadata for a listed version
+  package backup restore 1    Restore that version and every newer delta
+  package backup restore latest --yes
+
+Backups are stored outside projects in:
+  ~/streetraceing/.package/backups/<project-id>
 
 Shift options:
   --message <text>            Add a MESSAGE instruction
@@ -52,4 +66,6 @@ Examples:
   package diff update.zip
   package apply update.zip --dry-run
   package apply update.zip --yes
+  package backup list
+  package backup restore latest
 `;

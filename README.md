@@ -13,7 +13,7 @@ copy of a project.
   permission changes;
 - comparison and dry-run support before an update is applied;
 - path, archive-integrity, base-project, and per-file conflict checks, with
-  optional backups and rollback.
+  versioned backups, rollback history, and recovery backups.
 
 Requires Node.js 18 or later.
 
@@ -51,6 +51,7 @@ npx @streetraceing/package zip --cwd /path/to/project --strategy=walk
 npx @streetraceing/package shift base.zip --message "Describe the update"
 npx @streetraceing/package apply update.zip --conflict=skip
 npx @streetraceing/package inspect update.zip --json
+npx @streetraceing/package backup list
 ```
 
 Both command orders work for archive operations:
@@ -83,7 +84,8 @@ Package lifecycle hooks and archive cleanup are opt-in:
   "afterPackage": ["node scripts/report-package.mjs"],
   "beforeApply": [],
   "afterApply": ["npm run prepare"],
-  "deletePackageOnApply": false
+  "deletePackageOnApply": false,
+  "deleteSourcePackageOnApply": false
 }
 ```
 
@@ -92,8 +94,39 @@ runs after validation and confirmation but before files are changed; `afterApply
 runs only after a successful apply and before optional archive deletion. Hooks
 run sequentially from the project root and receive `PACKAGE_HOOK`,
 `PACKAGE_COMMAND`, `PACKAGE_ROOT`, and `PACKAGE_ARCHIVE`. Empty arrays run
-nothing. `deletePackageOnApply` defaults to `false`; when enabled, the source ZIP
+nothing. `deletePackageOnApply` defaults to `false`; when enabled, the applied ZIP
 is deleted only after apply and `afterApply` complete successfully.
+
+`deleteSourcePackageOnApply` also defaults to `false`. Update archives created by
+`package shift` record the source snapshot name and SHA-256. When cleanup is
+explicitly enabled, Package deletes only an exact matching regular file beside the
+update archive or in the project root; missing metadata, hash mismatches, symlinks,
+and failed or dry-run applies are preserved.
+
+## Backup history
+
+Persistent apply backups are stored outside the project so they cannot be packaged
+or accidentally committed:
+
+```text
+~/streetraceing/.package/backups/<project-id>
+```
+
+On Windows this resolves under `%USERPROFILE%\streetraceing\.package`. Each
+version stores the pre-apply state of affected paths and integrity metadata. Older
+project-local `.package-backups` archives remain discoverable for compatibility.
+
+```bash
+package backup list
+package backup inspect 1
+package backup restore latest
+package backup restore 3 --yes
+```
+
+Restoring an older version applies every newer rollback delta in reverse order.
+Before restoration, Package creates a recovery backup of the current state, making
+the rollback itself reversible. Set `STREETRACEING_PACKAGE_HOME` to override the
+package data directory for automation or isolated environments.
 
 See the [configuration schema](docs/schema.json) and
 [`.packageshift` format reference](docs/PACKAGESHIFT.md) for full details.

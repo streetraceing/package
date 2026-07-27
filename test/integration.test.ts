@@ -22,6 +22,11 @@ import { applyPackage } from '../src/apply/transaction.js';
 import { applyCommand } from '../src/commands/apply.js';
 import { writeZip } from '../src/archive/zip.js';
 import { sha256Buffer, stableJson } from '../src/util/hash.js';
+import {
+  listBackupVersions,
+  projectBackupDirectory,
+  restoreBackupVersion,
+} from '../src/apply/backups.js';
 import type { ManifestFile, PackageManifest } from '../src/types.js';
 
 async function write(
@@ -632,6 +637,174 @@ test('runs beforeApply and afterApply around successful apply', async () => {
     assert.ok(entries.every((entry) => entry.archiveExists === true));
     await assert.rejects(readFile(archive), /ENOENT/);
   } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test('deletes only the exact source snapshot referenced by a shift archive', async () => {
+  const workspace = await mkdtemp(
+    path.join(tmpdir(), 'package-source-cleanup-'),
+  );
+  const source = path.join(workspace, 'source-project');
+  const target = path.join(workspace, 'target-project');
+  try {
+    await mkdir(source, { recursive: true });
+    await write(source, 'src/index.ts', 'export const value = 1;\n');
+    await cp(source, target, { recursive: true });
+    const config = {
+      ...defaultConfig,
+      root: source,
+      output: workspace,
+      strategy: 'walk' as const,
+    };
+    const baseArchive = await createSnapshot(config, {
+      output: '../source-base.zip',
+      quiet: true,
+    });
+    await write(source, 'src/index.ts', 'export const value = 2;\n');
+    const updateArchive = await createShiftArchive(
+      '../source-base.zip',
+      config,
+      {
+        output: '../source-update.zip',
+        quiet: true,
+      },
+    );
+    const update = await loadPackage(updateArchive);
+    assert.equal(update.manifest.sourcePackage?.name, 'source-base.zip');
+    assert.match(
+      update.manifest.sourcePackage?.sha256 ?? '',
+      /^sha256:[0-9a-f]{64}$/,
+    );
+
+    await applyCommand(updateArchive, {
+      cwd: target,
+      dryRun: false,
+      yes: true,
+      force: false,
+      backup: false,
+      conflictStrategy: 'abort',
+      deletePackageOnApply: false,
+      deleteSourcePackageOnApply: true,
+    });
+
+    assert.equal(
+      await readFile(path.join(target, 'src/index.ts'), 'utf8'),
+      'export const value = 2;\n',
+    );
+    await assert.rejects(readFile(baseArchive), /ENOENT/);
+    assert.ok((await readFile(updateArchive)).length > 0);
+
+    await write(target, 'src/index.ts', 'export const value = 2;\n');
+    const mismatchBase = await createSnapshot(config, {
+      output: '../mismatch-base.zip',
+      quiet: true,
+    });
+    await write(source, 'src/index.ts', 'export const value = 3;\n');
+    const mismatchUpdate = await createShiftArchive(
+      '../mismatch-base.zip',
+      config,
+      {
+        output: '../mismatch-update.zip',
+        quiet: true,
+      },
+    );
+    const originalBase = await readFile(mismatchBase);
+    await writeFile(
+      mismatchBase,
+      Buffer.concat([originalBase, Buffer.from('changed')]),
+    );
+    await applyCommand(mismatchUpdate, {
+      cwd: target,
+      dryRun: false,
+      yes: true,
+      force: false,
+      backup: false,
+      conflictStrategy: 'abort',
+      deleteSourcePackageOnApply: true,
+    });
+    assert.ok((await readFile(mismatchBase)).length > originalBase.length);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test('stores versioned backups outside the project and restores older versions', async () => {
+  const workspace = await mkdtemp(
+    path.join(tmpdir(), 'package-backup-history-'),
+  );
+  const source = path.join(workspace, 'source-project');
+  const target = path.join(workspace, 'target-project');
+  const previousHome = process.env.STREETRACEING_PACKAGE_HOME;
+  process.env.STREETRACEING_PACKAGE_HOME = path.join(workspace, 'package-home');
+  try {
+    await mkdir(source, { recursive: true });
+    await mkdir(target, { recursive: true });
+    await write(target, 'src/index.ts', 'export const value = "original";\n');
+    const config = {
+      ...defaultConfig,
+      root: source,
+      output: workspace,
+      strategy: 'walk' as const,
+    };
+
+    await write(source, 'src/index.ts', 'export const value = "one";\n');
+    const firstArchive = await createSnapshot(config, {
+      output: '../version-one.zip',
+      quiet: true,
+    });
+    await applyCommand(firstArchive, {
+      cwd: target,
+      dryRun: false,
+      yes: true,
+      force: false,
+      backup: true,
+      conflictStrategy: 'overwrite',
+    });
+
+    await write(source, 'src/index.ts', 'export const value = "two";\n');
+    const secondArchive = await createSnapshot(config, {
+      output: '../version-two.zip',
+      quiet: true,
+    });
+    await applyCommand(secondArchive, {
+      cwd: target,
+      dryRun: false,
+      yes: true,
+      force: false,
+      backup: true,
+      conflictStrategy: 'overwrite',
+    });
+
+    const versions = await listBackupVersions(target);
+    assert.equal(versions.length, 2);
+    assert.ok(
+      versions.every((version) =>
+        version.archivePath.startsWith(projectBackupDirectory(target)),
+      ),
+    );
+    await assert.rejects(
+      readFile(path.join(target, '.package-backups', 'missing.zip')),
+      /ENOENT/,
+    );
+
+    const rollback = await restoreBackupVersion(target, '2', true);
+    assert.equal(rollback.restoredVersions.length, 2);
+    assert.equal(
+      await readFile(path.join(target, 'src/index.ts'), 'utf8'),
+      'export const value = "original";\n',
+    );
+    assert.ok((await readFile(rollback.recoveryBackupPath)).length > 0);
+
+    await restoreBackupVersion(target, 'latest', true);
+    assert.equal(
+      await readFile(path.join(target, 'src/index.ts'), 'utf8'),
+      'export const value = "two";\n',
+    );
+  } finally {
+    if (previousHome === undefined)
+      delete process.env.STREETRACEING_PACKAGE_HOME;
+    else process.env.STREETRACEING_PACKAGE_HOME = previousHome;
     await rm(workspace, { recursive: true, force: true });
   }
 });

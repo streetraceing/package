@@ -13,6 +13,7 @@ export interface ParsedArgs {
   force: boolean;
   backup?: boolean;
   deletePackageOnApply?: boolean;
+  deleteSourcePackageOnApply?: boolean;
   quiet: boolean;
   message?: string;
   conflictStrategy?: ConflictStrategy;
@@ -30,6 +31,7 @@ const commands = new Set([
   'init',
   'help',
   'version',
+  'backup',
 ]);
 
 function takeValue(
@@ -81,6 +83,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
     else if (arg === '--no-backup') parsed.backup = false;
     else if (arg === '--delete-package') parsed.deletePackageOnApply = true;
     else if (arg === '--keep-package') parsed.deletePackageOnApply = false;
+    else if (arg === '--delete-source-package')
+      parsed.deleteSourcePackageOnApply = true;
+    else if (arg === '--keep-source-package')
+      parsed.deleteSourcePackageOnApply = false;
     else if (arg === '--quiet' || arg === '-q') parsed.quiet = true;
     else if (arg === '--gitignore') parsed.configOverrides.gitignore = true;
     else if (arg === '--no-gitignore') parsed.configOverrides.gitignore = false;

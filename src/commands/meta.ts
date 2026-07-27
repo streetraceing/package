@@ -42,6 +42,10 @@ export async function inspectCommand(
   console.log(`Root: ${pkg.manifest.rootHash}`);
   if (pkg.manifest.baseRootHash)
     console.log(`Base: ${pkg.manifest.baseRootHash}`);
+  if (pkg.manifest.sourcePackage)
+    console.log(
+      `Source package: ${pkg.manifest.sourcePackage.name} (${pkg.manifest.sourcePackage.sha256})`,
+    );
 }
 
 export async function checkCommand(

@@ -14,6 +14,7 @@ import {
   listCommand,
 } from '../commands/meta.js';
 import { PackageError } from '../errors.js';
+import { backupCommand } from '../commands/backups.js';
 
 async function readVersion(): Promise<string> {
   const candidates = [
@@ -102,7 +103,17 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       afterApply: config.afterApply,
       deletePackageOnApply:
         args.deletePackageOnApply ?? config.deletePackageOnApply,
+      deleteSourcePackageOnApply:
+        args.deleteSourcePackageOnApply ?? config.deleteSourcePackageOnApply,
     });
+  } else if (args.command === 'backup') {
+    await backupCommand(
+      args.positionals[0],
+      args.positionals[1],
+      config.root,
+      args.json,
+      args.yes,
+    );
   } else if (args.command === 'inspect') {
     await inspectCommand(
       requirePositional(args.positionals, 0, 'archive path'),

@@ -6,10 +6,10 @@ of a project.
 
 ## Guides
 
-| Guide                                       | Use it when you need to...                                                          |
-| ------------------------------------------- | ----------------------------------------------------------------------------------- |
-| [Configuration schema](./schema.json)       | Configure file selection, ZIP output, metadata, and apply behavior in `.packagerc`. |
-| [`.packageshift` format](./PACKAGESHIFT.md) | Understand or author file removals, moves, copies, replacements, and mode changes.  |
+| Guide                                       | Use it when you need to...                                                                                   |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| [Configuration schema](./schema.json)       | Configure file selection, ZIP output, metadata, and apply behavior in `.packagerc`.                          |
+| [`.packageshift` format](./PACKAGESHIFT.md) | Understand or author file removals, moves, copies, replacements, mode changes, and source snapshot metadata. |
 
 ## Fastest path
 
@@ -51,7 +51,8 @@ Run `npx @streetraceing/package --help` for the complete command reference.
   "afterPackage": ["node scripts/report-package.mjs"],
   "beforeApply": [],
   "afterApply": ["npm run prepare"],
-  "deletePackageOnApply": false
+  "deletePackageOnApply": false,
+  "deleteSourcePackageOnApply": false
 }
 ```
 
@@ -59,11 +60,31 @@ Run `npx @streetraceing/package --help` for the complete command reference.
 - `afterPackage` runs after the archive is written.
 - `beforeApply` runs after validation and confirmation, before files change.
 - `afterApply` runs after a successful apply and before archive deletion.
-- `deletePackageOnApply` removes the source archive only after apply and
+- `deletePackageOnApply` removes the applied archive only after apply and
   `afterApply` complete successfully. It is `false` by default.
+- `deleteSourcePackageOnApply` removes the source snapshot referenced by a shift
+  archive only when its filename and SHA-256 both match. It is `false` by default.
 
 Hook commands run sequentially from the project root and receive
 `PACKAGE_HOOK`, `PACKAGE_COMMAND`, `PACKAGE_ROOT`, and `PACKAGE_ARCHIVE`.
+
+## Backup versions
+
+Apply backups are stored per project under
+`~/streetraceing/.package/backups/<project-id>`; on Windows the same path is
+resolved below `%USERPROFILE%`. Legacy `.package-backups` archives are still
+listed and restorable.
+
+```bash
+package backup list
+package backup inspect 1
+package backup restore latest
+package backup restore 3 --yes
+```
+
+A restore creates a recovery backup first, then restores the selected version and
+every newer delta. The recovery version can be selected later to undo the rollback.
+`STREETRACEING_PACKAGE_HOME` can override the data directory.
 
 ## Principles
 

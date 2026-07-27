@@ -160,7 +160,7 @@
       "type": "boolean",
       "default": true,
       "description": "Create a persistent rollback archive before apply.",
-      "markdownDescription": "`true` - Save affected local paths in `.package-backups` before writing changes.\n\n`false` - Skip the persistent backup. In-memory rollback is still attempted when application fails."
+      "markdownDescription": "`true` - Before a successful `apply` writes project files, save every affected path as a versioned rollback archive under the current user's package data directory. The default location is `~/streetraceing/.package/backups/<project-id>` on Linux and macOS and `%USERPROFILE%\\streetraceing\\.package\\backups\\<project-id>` on Windows. Use `package backup list`, `package backup inspect <version>`, and `package backup restore <version>` to work with history.\n\n`false` - Do not create a persistent version. In-memory rollback is still attempted when the current apply operation fails."
     },
     "conflictStrategy": {
       "type": "string",
@@ -272,8 +272,15 @@
     "deletePackageOnApply": {
       "type": "boolean",
       "default": false,
-      "description": "Delete the source archive after a successful apply.",
-      "markdownDescription": "`false` - Keep the archive after `package apply`. This is the non-destructive default.\n\n`true` - Delete the source archive only after all changes are applied successfully. The archive is retained during `--dry-run`, on validation errors, conflicts, cancellation, or rollback."
+      "description": "Delete the applied archive after a successful apply.",
+      "markdownDescription": "`false` - Keep the archive passed to `package apply`. This is the non-destructive default.\n\n`true` - Delete the applied archive only after all changes and `afterApply` commands complete successfully. The archive is retained during `--dry-run`, on validation errors, conflicts, cancellation, rollback, or hook failure.\n\n`--delete-package` - Enable this behavior for one apply.\n\n`--keep-package` - Disable it for one apply."
+    },
+    "deleteSourcePackageOnApply": {
+      "type": "boolean",
+      "default": false,
+      "description": "Delete the exact source snapshot referenced by a successfully applied shift archive.",
+      "markdownDescription": "`false` - Keep the snapshot archive that was passed to `package shift`. This is the non-destructive default and preserves existing behavior.\n\n`true` - After `apply` and `afterApply` finish successfully, inspect the patch manifest for the source snapshot name and SHA-256 recorded by `package shift`. Delete only a regular file with that exact name and hash, searched first beside the applied update archive and then in the target project root. Symlinks, hash mismatches, missing metadata, dry runs, cancelled applies, and failed applies are never deleted.\n\n`--delete-source-package` - Enable this behavior for one apply.\n\n`--keep-source-package` - Disable it for one apply.",
+      "examples": [false]
     }
   },
   "examples": [
@@ -297,7 +304,8 @@
       "compressionLevel": 9,
       "deterministic": true,
       "backupOnApply": true,
-      "conflictStrategy": "abort"
+      "conflictStrategy": "abort",
+      "deleteSourcePackageOnApply": false
     }
   ]
 }
