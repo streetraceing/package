@@ -8,6 +8,7 @@ import { writeZip } from '../archive/zip.js';
 import { PackageError } from '../errors.js';
 import { parseShift } from '../shift/parser.js';
 import { resolveInside } from '../util/path.js';
+import { runPackageHooks } from '../util/hooks.js';
 import {
   legacyPackageManifestPath,
   packageManifestPath,
@@ -92,6 +93,12 @@ export async function createSnapshot(
     ? path.resolve(config.root, options.output)
     : defaultArchivePath(config);
   await mkdir(path.dirname(archivePath), { recursive: true });
+  await runPackageHooks('beforePackage', config.beforePackage, {
+    root: config.root,
+    archivePath,
+    command: 'zip',
+    quiet: options.quiet,
+  });
   const files = await collectFiles(config, archivePath);
   const sensitive = findSensitiveFiles(files.map((file) => file.relativePath));
   if (sensitive.length > 0 && config.sensitiveFiles === 'error') {
@@ -136,6 +143,12 @@ export async function createSnapshot(
   await writeZip(archivePath, entries, {
     compressionLevel: config.compressionLevel,
     deterministic: config.deterministic,
+  });
+  await runPackageHooks('afterPackage', config.afterPackage, {
+    root: config.root,
+    archivePath,
+    command: 'zip',
+    quiet: options.quiet,
   });
   if (!options.quiet) {
     const bytes = entries.reduce((sum, entry) => sum + entry.data.length, 0);

@@ -38,6 +38,8 @@ Apply options:
   -y, --yes                   Skip interactive confirmation
   -f, --force                 Ignore base/hash conflicts
   --[no-]backup               Keep or disable a persistent backup
+  --delete-package            Delete the archive after a successful apply
+  --keep-package              Keep the archive after apply (default)
   --conflict <strategy>       Handle local/hash conflicts: abort, overwrite, or skip
 
 Shift options:

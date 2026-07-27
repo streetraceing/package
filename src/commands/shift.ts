@@ -14,6 +14,7 @@ import { renderShift } from '../shift/render.js';
 import { sha256File } from '../util/hash.js';
 import { PackageError } from '../errors.js';
 import { packageManifestPath, packageShiftPath } from '../archive/metadata.js';
+import { runPackageHooks } from '../util/hooks.js';
 
 export interface ShiftCommandOptions {
   output?: string;
@@ -26,16 +27,22 @@ export async function createShiftArchive(
   config: PackageConfig,
   options: ShiftCommandOptions = {},
 ): Promise<string> {
+  const outputPath = options.output
+    ? path.resolve(config.root, options.output)
+    : path.resolve(config.output, `${path.basename(config.root)}-shift.zip`);
+  await mkdir(path.dirname(outputPath), { recursive: true });
+  await runPackageHooks('beforePackage', config.beforePackage, {
+    root: config.root,
+    archivePath: outputPath,
+    command: 'shift',
+    quiet: options.quiet,
+  });
   const base = await loadPackage(path.resolve(config.root, baseArchive));
   if (base.manifest.kind !== 'snapshot')
     throw new PackageError(
       'The base archive must be a snapshot created by package zip.',
       'BASE_NOT_SNAPSHOT',
     );
-  const outputPath = options.output
-    ? path.resolve(config.root, options.output)
-    : path.resolve(config.output, `${path.basename(config.root)}-shift.zip`);
-  await mkdir(path.dirname(outputPath), { recursive: true });
   const resolvedBaseArchive = path.resolve(config.root, baseArchive);
   const baseRelative = path
     .relative(config.root, resolvedBaseArchive)
@@ -160,6 +167,12 @@ export async function createShiftArchive(
   await writeZip(outputPath, entries, {
     compressionLevel: config.compressionLevel,
     deterministic: config.deterministic,
+  });
+  await runPackageHooks('afterPackage', config.afterPackage, {
+    root: config.root,
+    archivePath: outputPath,
+    command: 'shift',
+    quiet: options.quiet,
   });
 
   if (!options.quiet) {

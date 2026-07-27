@@ -28,6 +28,9 @@ export interface PackageConfig {
   conflictStrategy: ConflictStrategy;
   renameDetection: boolean;
   renameThreshold: number;
+  beforePackage: string[];
+  afterPackage: string[];
+  deletePackageOnApply: boolean;
 }
 
 export interface ManifestFile {
@@ -132,4 +135,5 @@ export interface ApplyOptions {
   force: boolean;
   backup: boolean;
   conflictStrategy: ConflictStrategy;
+  deletePackageOnApply?: boolean;
 }

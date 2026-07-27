@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { rm } from 'node:fs/promises';
 import { loadPackage } from '../manifest/load.js';
 import type { ApplyOptions } from '../types.js';
 import { applyPackage } from '../apply/transaction.js';
@@ -42,4 +43,14 @@ export async function applyCommand(
     );
   if (result.skippedPaths.length > 0)
     console.log(`Skipped conflicts: ${result.skippedPaths.join(', ')}`);
+  if (!options.dryRun && options.deletePackageOnApply) {
+    try {
+      await rm(resolvedArchive, { force: true });
+      console.log(`Deleted package: ${resolvedArchive}`);
+    } catch (error) {
+      console.warn(
+        `Warning: changes were applied, but the package could not be deleted: ${(error as Error).message}`,
+      );
+    }
+  }
 }

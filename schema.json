@@ -3,6 +3,7 @@
   "$id": "https://streetraceing.github.io/package/schema.json",
   "title": "@streetraceing/package configuration",
   "description": "Strict JSON configuration for the @streetraceing/package CLI. Store this object in .packagerc or .packagerc.json.",
+  "markdownDescription": "Strict JSON configuration for `@streetraceing/package`. Store the object in `.packagerc` or `.packagerc.json`.\n\nAll options have conservative defaults: package hooks are disabled, apply keeps the source archive, conflicts abort, and symbolic links are not followed.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -10,155 +11,245 @@
       "type": "string",
       "const": "https://streetraceing.github.io/package/schema.json",
       "default": "https://streetraceing.github.io/package/schema.json",
-      "description": "Enables editor completion and validation for .packagerc."
+      "description": "Enables editor completion and validation for .packagerc.",
+      "markdownDescription": "Connects `.packagerc` to the published JSON Schema so supported editors can provide validation, hover documentation, and completion.\n\nKeep the value exactly as shown."
     },
     "type": {
       "type": "string",
-      "enum": ["zip"],
       "default": "zip",
-      "description": "Archive format to create."
+      "description": "Archive format to create.",
+      "markdownDescription": "Selects the output archive format.\n\n`zip` - Create a standard ZIP archive. This is currently the only supported format.",
+      "enum": ["zip"],
+      "examples": ["zip"]
     },
     "root": {
       "type": "string",
-      "minLength": 1,
       "default": ".",
-      "description": "Project root, resolved relative to the directory containing the configuration file."
+      "description": "Project root resolved from the directory where the CLI is started.",
+      "markdownDescription": "Project directory used as the working root for collection, hooks, archive naming, and apply operations.\n\n`.` - Use the current project directory.\n\n`./packages/app` - Package a nested project.",
+      "minLength": 1,
+      "examples": [".", "./packages/app"]
     },
     "output": {
       "type": "string",
-      "minLength": 1,
       "default": ".",
-      "description": "Output directory, resolved relative to the project root."
+      "description": "Output directory resolved relative to the project root.",
+      "markdownDescription": "Directory where generated archives are written. Relative values are resolved from `root`.\n\n`.` - Write beside the project files.\n\n`./artifacts` - Write into an artifacts directory.",
+      "minLength": 1,
+      "examples": [".", "./artifacts"]
     },
     "name": {
       "type": "string",
-      "minLength": 1,
       "default": "{folder}.zip",
-      "description": "Default archive filename. The {folder} token is replaced with the project root folder name."
+      "description": "Default snapshot archive filename.",
+      "markdownDescription": "Filename used by `package zip` when `--output` is omitted.\n\n`{folder}` - Replaced with the project root folder name.\n\nExample: `{folder}-source.zip`.",
+      "minLength": 1,
+      "examples": ["{folder}.zip", "{folder}-source.zip"]
     },
     "strategy": {
       "type": "string",
-      "enum": ["git", "walk"],
       "default": "git",
-      "description": "File collection strategy. The git strategy uses git ls-files when possible and falls back to the internal walker."
+      "description": "File collection strategy.",
+      "markdownDescription": "`git` - Prefer `git ls-files` so nested `.gitignore`, repository excludes, tracked files, and untracked non-ignored files follow Git behavior. Falls back to the internal walker when Git is unavailable.\n\n`walk` - Always use the built-in filesystem walker and ignore matcher.",
+      "enum": ["git", "walk"],
+      "examples": ["git"]
     },
     "gitignore": {
       "type": "boolean",
       "default": true,
-      "description": "Respect .gitignore rules and standard Git exclusions."
+      "description": "Respect Git ignore rules.",
+      "markdownDescription": "`true` - Apply `.gitignore` and standard Git exclusions.\n\n`false` - Do not use `.gitignore` rules. Reserved package metadata and internal exclusions still apply."
     },
     "npmignore": {
       "type": "boolean",
       "default": false,
-      "description": "Also apply .npmignore rules while collecting files."
+      "description": "Apply .npmignore rules during collection.",
+      "markdownDescription": "`false` - Ignore `.npmignore`; this preserves existing behavior.\n\n`true` - Exclude files matched by `.npmignore` in addition to other filters."
     },
     "include": {
       "type": "array",
+      "default": ["**/*"],
+      "description": "Glob patterns selecting files eligible for packaging.",
+      "markdownDescription": "Ordered allow-list of project-relative glob patterns. A file must match at least one entry before ignore rules are applied.\n\n`**/*` - Select every regular file recursively.\n\n`src/**` - Select only files below `src`.",
       "items": {
         "type": "string",
         "minLength": 1
       },
-      "default": ["**/*"],
-      "description": "Glob patterns that select files eligible for packaging."
+      "minItems": 1,
+      "examples": [["**/*"], ["src/**", "package.json"]]
     },
     "ignore": {
       "type": "array",
+      "default": [],
+      "description": "Additional project-relative glob patterns to exclude.",
+      "markdownDescription": "Extra deny-list evaluated after standard exclusions. Empty by default, so enabling the option does not remove additional files.\n\n`dist/**` - Exclude generated output.\n\n`src/assets/**` - Exclude a subtree.",
       "items": {
         "type": "string",
         "minLength": 1
       },
-      "default": [],
-      "description": "Additional glob patterns to exclude after standard ignore processing."
+      "examples": [[], ["dist/**", "coverage/**"]]
     },
     "dot": {
       "type": "boolean",
       "default": true,
-      "description": "Include dotfiles such as .github and .npmrc unless another rule excludes them."
+      "description": "Include dotfiles unless another rule excludes them.",
+      "markdownDescription": "`true` - Allow files such as `.github/workflows/ci.yml` and `.npmrc`.\n\n`false` - Exclude ordinary dotfiles. Reserved `.packagemanifest.json` and `.packageshift` handling is independent."
     },
     "followSymlinks": {
       "type": "boolean",
       "default": false,
-      "description": "Follow symbolic links while walking the project. Disabled by default for safety."
+      "description": "Follow symbolic links while walking the project.",
+      "markdownDescription": "`false` - Do not follow symbolic links. This is the safe default and prevents collecting content outside the project root.\n\n`true` - Follow links only when the resolved target remains inside `root`."
     },
     "includeEmptyDirectories": {
       "type": "boolean",
       "default": false,
-      "description": "Include empty directory entries in generated archives."
+      "description": "Include explicit empty-directory entries.",
+      "markdownDescription": "`false` - Store files only, preserving existing archive behavior.\n\n`true` - Add entries for selected empty directories when supported by collection."
     },
     "manifest": {
       "type": "boolean",
       "default": true,
-      "description": "Write .packagemanifest.json with file metadata and SHA-256 hashes."
+      "description": "Embed .packagemanifest.json in generated archives.",
+      "markdownDescription": "`true` - Write `.packagemanifest.json` with file size, mode, SHA-256, and root hash metadata.\n\n`false` - Reserved for manifestless workflows. Disabling metadata reduces base verification and is not recommended."
     },
     "shiftFile": {
       "type": "string",
-      "minLength": 1,
       "default": ".packageshift",
-      "description": "Project-relative .packageshift source file. When present, package zip validates it and stores it as the reserved .packageshift archive entry."
+      "description": "Project-relative source file embedded as .packageshift when present.",
+      "markdownDescription": "Path to the source `.packageshift` file. `package zip` validates it and stores it under the reserved archive path `.packageshift`, regardless of dotfile, include, ignore, or Git filtering.\n\nThe protocol header inside the file remains `PACKAGESHIFT 1`.",
+      "minLength": 1,
+      "examples": [".packageshift", "config/release.packageshift"]
     },
     "compressionLevel": {
       "type": "integer",
+      "default": 9,
+      "description": "ZIP deflate compression level.",
+      "markdownDescription": "`0` - Store entries without deflate compression.\n\n`1` - Faster compression with larger output.\n\n`9` - Maximum compression and the default.",
       "minimum": 0,
       "maximum": 9,
-      "default": 9,
-      "description": "ZIP deflate compression level. Use 0 to store files without compression."
+      "examples": [9]
     },
     "deterministic": {
       "type": "boolean",
       "default": true,
-      "description": "Use stable ordering and normalized metadata to produce reproducible archives."
+      "description": "Normalize archive metadata for reproducible output.",
+      "markdownDescription": "`true` - Sort entries and normalize timestamps so unchanged inputs produce stable archives.\n\n`false` - Allow source metadata to influence archive bytes."
     },
     "preserveMode": {
       "type": "boolean",
       "default": true,
-      "description": "Preserve Unix file permission modes in the archive manifest."
+      "description": "Preserve Unix permission modes.",
+      "markdownDescription": "`true` - Record source permission modes in manifest and ZIP metadata.\n\n`false` - Normalize file modes to `0644`."
     },
     "preserveMtime": {
       "type": "boolean",
       "default": false,
-      "description": "Preserve source modification times instead of normalized deterministic timestamps."
+      "description": "Preserve source modification timestamps.",
+      "markdownDescription": "`false` - Omit source mtimes from the manifest and use deterministic ZIP timestamps.\n\n`true` - Store source mtimes; this can make otherwise identical archives differ."
     },
     "sensitiveFiles": {
       "type": "string",
-      "enum": ["warn", "error", "allow"],
       "default": "warn",
-      "description": "Behavior when potentially sensitive files such as .env or private keys are selected."
+      "description": "Behavior when selected paths look sensitive.",
+      "markdownDescription": "`warn` - Package files but print a warning. This preserves usability without silently discarding files.\n\n`error` - Stop packaging before the archive is written.\n\n`allow` - Package without a sensitive-file warning.",
+      "enum": ["warn", "error", "allow"],
+      "examples": ["warn"]
     },
     "backupOnApply": {
       "type": "boolean",
       "default": true,
-      "description": "Create a rollback archive in .package-backups before applying changes."
+      "description": "Create a persistent rollback archive before apply.",
+      "markdownDescription": "`true` - Save affected local paths in `.package-backups` before writing changes.\n\n`false` - Skip the persistent backup. In-memory rollback is still attempted when application fails."
     },
     "conflictStrategy": {
       "type": "string",
-      "enum": ["abort", "overwrite", "skip"],
       "default": "abort",
-      "description": "Default behavior for destination and .packageshift IF sha256 conflicts: abort the whole operation, overwrite local files, or skip conflicting paths."
+      "description": "Default apply behavior for local and hash conflicts.",
+      "markdownDescription": "`abort` - Make no changes when an unresolved conflict exists. This is the safe default.\n\n`overwrite` - Replace conflicting local paths.\n\n`skip` - Keep conflicting local paths and apply non-conflicting changes.",
+      "enum": ["abort", "overwrite", "skip"],
+      "examples": ["abort"]
     },
     "renameDetection": {
       "type": "boolean",
       "default": true,
-      "description": "Detect exact renames by matching hashes while creating shift archives."
+      "description": "Detect exact renames while creating shift archives.",
+      "markdownDescription": "`true` - Pair removed and added files with identical SHA-256 content and emit `MOVE` instructions in `.packageshift`.\n\n`false` - Represent the same change as a removal plus payload addition."
     },
     "renameThreshold": {
       "type": "number",
+      "default": 0.8,
+      "description": "Similarity threshold reserved for approximate rename detection.",
+      "markdownDescription": "A number from `0` to `1`.\n\n`0.8` - Require 80% similarity when approximate rename detection becomes available. Exact hash-based detection is used today.",
       "minimum": 0,
       "maximum": 1,
-      "default": 0.8,
-      "description": "Reserved similarity threshold for approximate rename detection."
+      "examples": [0.8]
+    },
+    "beforePackage": {
+      "default": [],
+      "description": "Shell commands executed before creating a snapshot or shift archive.",
+      "markdownDescription": "Commands run sequentially from `root` before file collection for `package zip` and `package shift`. An empty array preserves current behavior. A non-zero exit stops packaging before a new archive is written.\n\n`\"npm run build\"` - Run one command.\n\n`[\"npm run lint\", \"npm run build\"]` - Run multiple commands in order.\n\nAvailable environment variables:\n\n`PACKAGE_HOOK` - `beforePackage`\n\n`PACKAGE_COMMAND` - `zip` or `shift`\n\n`PACKAGE_ROOT` - Absolute project root\n\n`PACKAGE_ARCHIVE` - Absolute intended archive path",
+      "examples": [[], "npm run build", ["npm run lint", "npm run build"]],
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ]
+    },
+    "afterPackage": {
+      "default": [],
+      "description": "Shell commands executed after a snapshot or shift archive is written.",
+      "markdownDescription": "Commands run sequentially from `root` only after the archive is successfully created. An empty array preserves current behavior. If a command fails, the created archive is retained and the CLI exits with an error.\n\n`\"node scripts/report-package.mjs\"` - Run one command.\n\n`[\"npm run checksum\", \"npm run publish:artifact\"]` - Run multiple commands in order.\n\nAvailable environment variables:\n\n`PACKAGE_HOOK` - `afterPackage`\n\n`PACKAGE_COMMAND` - `zip` or `shift`\n\n`PACKAGE_ROOT` - Absolute project root\n\n`PACKAGE_ARCHIVE` - Absolute created archive path",
+      "examples": [
+        [],
+        "node scripts/report-package.mjs",
+        ["npm run checksum", "npm run publish:artifact"]
+      ],
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ]
+    },
+    "deletePackageOnApply": {
+      "type": "boolean",
+      "default": false,
+      "description": "Delete the source archive after a successful apply.",
+      "markdownDescription": "`false` - Keep the archive after `package apply`. This is the non-destructive default.\n\n`true` - Delete the source archive only after all changes are applied successfully. The archive is retained during `--dry-run`, on validation errors, conflicts, cancellation, or rollback."
     }
   },
   "examples": [
     {
       "$schema": "https://streetraceing.github.io/package/schema.json",
       "type": "zip",
+      "root": ".",
       "output": ".",
       "name": "{folder}.zip",
       "strategy": "git",
       "gitignore": true,
+      "npmignore": false,
       "include": ["**/*"],
       "ignore": ["dist/**", "coverage/**"],
       "dot": true,
+      "beforePackage": [],
+      "afterPackage": [],
+      "deletePackageOnApply": false,
       "compressionLevel": 9,
       "deterministic": true,
       "backupOnApply": true,

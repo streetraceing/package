@@ -19,6 +19,7 @@ import { createShiftArchive } from '../src/commands/shift.js';
 import { loadPackage } from '../src/manifest/load.js';
 import { comparePackageToProject } from '../src/commands/compare.js';
 import { applyPackage } from '../src/apply/transaction.js';
+import { applyCommand } from '../src/commands/apply.js';
 import { writeZip } from '../src/archive/zip.js';
 import { sha256Buffer, stableJson } from '../src/util/hash.js';
 import type { ManifestFile, PackageManifest } from '../src/types.js';
@@ -419,6 +420,126 @@ test('applies .packageshift hash conflicts according to conflict strategy', asyn
       await readFile(path.join(target, 'src/index.ts'), 'utf8'),
       'new\n',
     );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test('runs beforePackage and afterPackage hooks for zip and shift', async () => {
+  const workspace = await mkdtemp(path.join(tmpdir(), 'package-hooks-'));
+  const source = path.join(workspace, 'source-project');
+  try {
+    await mkdir(source, { recursive: true });
+    await write(source, 'src/index.ts', 'export const value = 1;\n');
+    await write(
+      source,
+      'scripts/hook.cjs',
+      [
+        "const fs = require('node:fs');",
+        "const path = require('node:path');",
+        'const phase = process.argv[2];',
+        'const file = path.join(process.cwd(), `hook-${phase}-${process.env.PACKAGE_COMMAND}.json`);',
+        "fs.writeFileSync(file, JSON.stringify({ hook: process.env.PACKAGE_HOOK, command: process.env.PACKAGE_COMMAND, root: process.env.PACKAGE_ROOT, archive: process.env.PACKAGE_ARCHIVE }) + '\\n');",
+        '',
+      ].join('\n'),
+    );
+
+    const config = {
+      ...defaultConfig,
+      root: source,
+      output: workspace,
+      strategy: 'walk' as const,
+      beforePackage: ['node scripts/hook.cjs before'],
+      afterPackage: ['node scripts/hook.cjs after'],
+    };
+    const baseArchive = await createSnapshot(config, {
+      output: '../hooks-base.zip',
+      quiet: true,
+    });
+    const base = await loadPackage(baseArchive);
+    assert.ok(
+      base.manifest.files.some((file) => file.path === 'hook-before-zip.json'),
+    );
+    assert.ok(
+      !base.manifest.files.some((file) => file.path === 'hook-after-zip.json'),
+    );
+    const afterZip = JSON.parse(
+      await readFile(path.join(source, 'hook-after-zip.json'), 'utf8'),
+    ) as Record<string, string>;
+    assert.equal(afterZip.hook, 'afterPackage');
+    assert.equal(afterZip.command, 'zip');
+    assert.equal(afterZip.archive, baseArchive);
+
+    await write(source, 'src/index.ts', 'export const value = 2;\n');
+    const shiftArchive = await createShiftArchive('../hooks-base.zip', config, {
+      output: '../hooks-shift.zip',
+      quiet: true,
+    });
+    const shift = await loadPackage(shiftArchive);
+    assert.ok(
+      shift.manifest.files.some(
+        (file) => file.path === 'hook-before-shift.json',
+      ),
+    );
+    const afterShift = JSON.parse(
+      await readFile(path.join(source, 'hook-after-shift.json'), 'utf8'),
+    ) as Record<string, string>;
+    assert.equal(afterShift.hook, 'afterPackage');
+    assert.equal(afterShift.command, 'shift');
+    assert.equal(afterShift.archive, shiftArchive);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test('deletes the source archive only after successful non-dry-run apply', async () => {
+  const workspace = await mkdtemp(path.join(tmpdir(), 'package-delete-apply-'));
+  const source = path.join(workspace, 'source-project');
+  const target = path.join(workspace, 'target-project');
+  try {
+    await mkdir(source, { recursive: true });
+    await mkdir(target, { recursive: true });
+    await write(source, 'src/index.ts', 'export const value = 1;\n');
+    const config = {
+      ...defaultConfig,
+      root: source,
+      output: workspace,
+      strategy: 'walk' as const,
+    };
+
+    const dryRunArchive = await createSnapshot(config, {
+      output: '../dry-run.zip',
+      quiet: true,
+    });
+    await applyCommand(dryRunArchive, {
+      cwd: target,
+      dryRun: true,
+      yes: true,
+      force: false,
+      backup: false,
+      conflictStrategy: 'abort',
+      deletePackageOnApply: true,
+    });
+    assert.ok((await readFile(dryRunArchive)).length > 0);
+
+    const applyArchive = await createSnapshot(config, {
+      output: '../delete-after-apply.zip',
+      quiet: true,
+    });
+    await applyCommand(applyArchive, {
+      cwd: target,
+      dryRun: false,
+      yes: true,
+      force: false,
+      backup: false,
+      conflictStrategy: 'abort',
+      deletePackageOnApply: true,
+    });
+    assert.equal(
+      await readFile(path.join(target, 'src/index.ts'), 'utf8'),
+      'export const value = 1;\n',
+    );
+    await assert.rejects(readFile(applyArchive), /ENOENT/);
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }

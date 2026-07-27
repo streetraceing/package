@@ -43,6 +43,25 @@ npx @streetraceing/package apply update.zip --yes
 
 Run `npx @streetraceing/package --help` for the complete command reference.
 
+## Optional package lifecycle settings
+
+```json
+{
+  "beforePackage": ["npm run build"],
+  "afterPackage": ["node scripts/report-package.mjs"],
+  "deletePackageOnApply": false
+}
+```
+
+- `beforePackage` runs sequential shell commands before file collection for
+  `zip` and `shift`.
+- `afterPackage` runs sequential shell commands after the archive is written.
+- `deletePackageOnApply` removes the source archive only after a successful
+  non-dry-run apply. It is `false` by default.
+
+Hook commands run from the project root and receive `PACKAGE_HOOK`,
+`PACKAGE_COMMAND`, `PACKAGE_ROOT`, and `PACKAGE_ARCHIVE`.
+
 ## Principles
 
 - **Safe by default:** Package validates archive paths and integrity, expected

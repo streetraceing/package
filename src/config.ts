@@ -30,6 +30,9 @@ export const defaultConfig: PackageConfig = {
   conflictStrategy: 'abort',
   renameDetection: true,
   renameThreshold: 0.8,
+  beforePackage: [],
+  afterPackage: [],
+  deletePackageOnApply: false,
 };
 
 function parseJson(input: string, sourceName: string): unknown {
@@ -81,6 +84,9 @@ function validateConfig(
     'conflictStrategy',
     'renameDetection',
     'renameThreshold',
+    'beforePackage',
+    'afterPackage',
+    'deletePackageOnApply',
   ]);
 
   for (const key of Object.keys(config)) {
@@ -124,6 +130,7 @@ function validateConfig(
     'preserveMtime',
     'backupOnApply',
     'renameDetection',
+    'deletePackageOnApply',
   ] as const;
   for (const key of booleanKeys) {
     if (config[key] !== undefined && typeof config[key] !== 'boolean') {
@@ -148,6 +155,25 @@ function validateConfig(
         'CONFIG_INVALID',
       );
     }
+  }
+
+  const hookKeys = ['beforePackage', 'afterPackage'] as const;
+  for (const key of hookKeys) {
+    const value = config[key];
+    if (value === undefined) continue;
+    if (typeof value === 'string' && value.length > 0) {
+      config[key] = [value];
+      continue;
+    }
+    if (
+      Array.isArray(value) &&
+      value.every((item) => typeof item === 'string' && item.length > 0)
+    )
+      continue;
+    throw new PackageError(
+      `${sourceName}: ${key} must be a non-empty string or an array of non-empty strings.`,
+      'CONFIG_INVALID',
+    );
   }
 
   if (config.type !== undefined && config.type !== 'zip') {

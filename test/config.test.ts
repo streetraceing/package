@@ -8,6 +8,7 @@ import { initCommand } from '../src/commands/meta.js';
 
 interface JsonSchemaProperty {
   default?: unknown;
+  markdownDescription?: string;
 }
 
 interface JsonSchema {
@@ -34,6 +35,9 @@ test('package init creates a schema-enabled .packagerc', async () => {
     assert.equal(parsed.$schema, configSchemaUrl);
     assert.equal(parsed.root, defaultConfig.root);
     assert.equal(parsed.renameThreshold, defaultConfig.renameThreshold);
+    assert.deepEqual(parsed.beforePackage, []);
+    assert.deepEqual(parsed.afterPackage, []);
+    assert.equal(parsed.deletePackageOnApply, false);
 
     const loaded = await loadConfig(workspace);
     assert.equal(loaded.config.$schema, configSchemaUrl);
@@ -59,6 +63,12 @@ test('published JSON Schema matches configuration defaults', async () => {
     );
   }
   assert.equal(properties.$schema?.default, configSchemaUrl);
+  for (const [key, property] of Object.entries(properties)) {
+    assert.ok(
+      property.markdownDescription?.includes('`'),
+      `schema markdownDescription for ${key}`,
+    );
+  }
 });
 
 test('configuration rejects options not declared by the schema', async () => {
@@ -109,6 +119,41 @@ test('configuration rejects numeric strings', async () => {
     await assert.rejects(
       loadConfig(workspace),
       /compressionLevel must be an integer from 0 to 9/,
+    );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test('configuration validates package hooks and apply cleanup settings', async () => {
+  const workspace = await mkdtemp(path.join(tmpdir(), 'package-hooks-config-'));
+  try {
+    await writeFile(
+      path.join(workspace, '.packagerc'),
+      JSON.stringify(
+        {
+          beforePackage: 'npm run build',
+          afterPackage: ['node scripts/report.mjs'],
+          deletePackageOnApply: true,
+        },
+        null,
+        2,
+      ),
+      'utf8',
+    );
+    const loaded = await loadConfig(workspace);
+    assert.deepEqual(loaded.config.beforePackage, ['npm run build']);
+    assert.deepEqual(loaded.config.afterPackage, ['node scripts/report.mjs']);
+    assert.equal(loaded.config.deletePackageOnApply, true);
+
+    await writeFile(
+      path.join(workspace, '.packagerc'),
+      '{"beforePackage":42}\n',
+      'utf8',
+    );
+    await assert.rejects(
+      loadConfig(workspace),
+      /beforePackage must be a non-empty string or an array of non-empty strings/,
     );
   } finally {
     await rm(workspace, { recursive: true, force: true });

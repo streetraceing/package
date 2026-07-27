@@ -1,6 +1,6 @@
 {
   "name": "@streetraceing/package",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Package, compare, and safely apply project source archives from the command line.",
   "type": "module",
   "lint-staged": {
@@ -20,7 +20,7 @@
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "npm run sync:schema && npm run clean && tsc -p tsconfig.build.json && node -e \"require('node:fs').chmodSync('dist/bin/package.js', 0o755)\"",
-    "dev": "tsx ./bin/package.ts",
+    "dev": "tsx ./bin`/package.ts",
     "start": "node ./dist/bin/package.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prettier:write": "prettier . --write",
@@ -51,6 +51,9 @@
   ],
   "devDependencies": {
     "@types/node": "^22.15.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.2.0",
+    "prettier": "3.9.6",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   },

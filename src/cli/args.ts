@@ -12,6 +12,7 @@ export interface ParsedArgs {
   yes: boolean;
   force: boolean;
   backup?: boolean;
+  deletePackageOnApply?: boolean;
   quiet: boolean;
   message?: string;
   conflictStrategy?: ConflictStrategy;
@@ -78,6 +79,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
     else if (arg === '--force' || arg === '-f') parsed.force = true;
     else if (arg === '--backup') parsed.backup = true;
     else if (arg === '--no-backup') parsed.backup = false;
+    else if (arg === '--delete-package') parsed.deletePackageOnApply = true;
+    else if (arg === '--keep-package') parsed.deletePackageOnApply = false;
     else if (arg === '--quiet' || arg === '-q') parsed.quiet = true;
     else if (arg === '--gitignore') parsed.configOverrides.gitignore = true;
     else if (arg === '--no-gitignore') parsed.configOverrides.gitignore = false;
