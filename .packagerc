@@ -24,5 +24,12 @@
   "backupOnApply": false,
   "conflictStrategy": "abort",
   "renameDetection": true,
-  "renameThreshold": 0.8
+  "renameThreshold": 0.8,
+  "afterApply": [
+    "npm install",
+    "npm run prettier:write",
+    "npm run typecheck"
+  ],
+  "deletePackageOnApply": true,
+  "deleteSourcePackageOnApply": true
 }
