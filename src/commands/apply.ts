@@ -1,12 +1,16 @@
 import path from 'node:path';
-import { lstat, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { loadPackage } from '../manifest/load.js';
 import type { ApplyOptions, LoadedPackage } from '../types.js';
 import { applyPackage } from '../apply/transaction.js';
 import { comparePackageToProject } from './compare.js';
 import { formatChanges } from './diff.js';
 import { runPackageHooks } from '../util/hooks.js';
-import { sha256File } from '../util/hash.js';
+import {
+  deletePreparedSourcePackage,
+  prepareSourcePackageCleanup,
+  type SourcePackageCleanupPlan,
+} from '../apply/source-package.js';
 
 interface ApplyContext {
   archivePath: string;
@@ -19,45 +23,18 @@ function cleanupWarning(message: string, error?: unknown): void {
 }
 
 async function deleteSourcePackage(
-  pkg: LoadedPackage,
-  context: ApplyContext,
+  plan: SourcePackageCleanupPlan,
 ): Promise<void> {
-  const source = pkg.manifest.sourcePackage;
-  if (!source) {
-    cleanupWarning(
-      'source package cleanup was requested, but this archive does not identify the snapshot used to create it.',
-    );
-    return;
+  const result = await deletePreparedSourcePackage(plan);
+  if (result.deletedPath) {
+    const suffix =
+      plan.matchedBy === 'project-state'
+        ? ' (matched project state before apply)'
+        : '';
+    console.log(`Deleted source package: ${result.deletedPath}${suffix}`);
+  } else if (result.warning) {
+    cleanupWarning(result.warning);
   }
-
-  const candidates = [
-    path.join(path.dirname(context.archivePath), source.name),
-    path.join(context.projectRoot, source.name),
-  ];
-  const seen = new Set<string>();
-
-  for (const candidate of candidates) {
-    const resolved = path.resolve(candidate);
-    if (resolved === context.archivePath || seen.has(resolved)) continue;
-    seen.add(resolved);
-
-    try {
-      const fileStat = await lstat(resolved);
-      if (!fileStat.isFile() || fileStat.isSymbolicLink()) continue;
-      if ((await sha256File(resolved)) !== source.sha256) continue;
-      await rm(resolved, { force: true });
-      console.log(`Deleted source package: ${resolved}`);
-      return;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
-      cleanupWarning(`source package cleanup failed for ${resolved}`, error);
-      return;
-    }
-  }
-
-  cleanupWarning(
-    `source package ${source.name} was not deleted because no exact SHA-256 match was found next to the applied archive or in the project root.`,
-  );
 }
 
 async function deleteAppliedPackage(archivePath: string): Promise<void> {
@@ -95,13 +72,13 @@ async function runAfterApplyHooks(
 }
 
 async function runPostApplyLifecycle(
-  pkg: LoadedPackage,
   options: ApplyOptions,
   context: ApplyContext,
+  sourceCleanupPlan?: SourcePackageCleanupPlan,
 ): Promise<void> {
   await runAfterApplyHooks(options, context);
-  if (options.deleteSourcePackageOnApply)
-    await deleteSourcePackage(pkg, context);
+  if (options.deleteSourcePackageOnApply && sourceCleanupPlan)
+    await deleteSourcePackage(sourceCleanupPlan);
   if (options.deletePackageOnApply)
     await deleteAppliedPackage(context.archivePath);
 }
@@ -134,6 +111,10 @@ export async function applyCommand(
   };
   const pkg = await loadPackage(context.archivePath);
   const comparison = await comparePackageToProject(pkg, context.projectRoot);
+  const sourceCleanupPlan =
+    !options.dryRun && options.deleteSourcePackageOnApply
+      ? await prepareSourcePackageCleanup(pkg, context)
+      : undefined;
 
   printPackageMetadata(pkg, context);
   printConflictPolicy(options);
@@ -160,5 +141,6 @@ export async function applyCommand(
   if (result.skippedPaths.length > 0)
     console.log(`Skipped conflicts: ${result.skippedPaths.join(', ')}`);
 
-  if (!options.dryRun) await runPostApplyLifecycle(pkg, options, context);
+  if (!options.dryRun)
+    await runPostApplyLifecycle(options, context, sourceCleanupPlan);
 }

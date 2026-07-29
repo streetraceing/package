@@ -807,6 +807,62 @@ test('deletes only the exact source snapshot referenced by a shift archive', asy
   }
 });
 
+test('discovers and deletes a snapshot matching the project state before apply', async () => {
+  const workspace = await mkdtemp(
+    path.join(tmpdir(), 'package-source-discovery-'),
+  );
+  const source = path.join(workspace, 'source-project');
+  const target = path.join(workspace, 'target-project');
+  try {
+    await mkdir(source, { recursive: true });
+    await write(source, 'src/index.ts', 'export const value = 1;\n');
+    await cp(source, target, { recursive: true });
+
+    const baseConfig = {
+      ...defaultConfig,
+      root: source,
+      output: target,
+      strategy: 'walk' as const,
+    };
+    const sourceSnapshot = await createSnapshot(baseConfig, {
+      output: path.join(target, 'package.zip'),
+      quiet: true,
+    });
+
+    await write(source, 'src/index.ts', 'export const value = 2;\n');
+    const updateArchive = await createSnapshot(
+      { ...baseConfig, output: workspace },
+      {
+        output: path.join(workspace, 'update-snapshot.zip'),
+        quiet: true,
+      },
+    );
+    const update = await loadPackage(updateArchive);
+    assert.equal(update.manifest.sourcePackage, undefined);
+    assert.equal(update.manifest.kind, 'snapshot');
+
+    await applyCommand(updateArchive, {
+      cwd: target,
+      dryRun: false,
+      yes: true,
+      force: false,
+      backup: false,
+      conflictStrategy: 'overwrite',
+      deletePackageOnApply: false,
+      deleteSourcePackageOnApply: true,
+    });
+
+    assert.equal(
+      await readFile(path.join(target, 'src/index.ts'), 'utf8'),
+      'export const value = 2;\n',
+    );
+    await assert.rejects(readFile(sourceSnapshot), /ENOENT/);
+    assert.ok((await readFile(updateArchive)).length > 0);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test('stores versioned backups outside the project and restores older versions', async () => {
   const workspace = await mkdtemp(
     path.join(tmpdir(), 'package-backup-history-'),

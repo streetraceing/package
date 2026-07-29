@@ -63,8 +63,11 @@ Run `npx @streetraceing/package --help` for the complete command reference.
   command prints a warning; later hooks and cleanup still continue.
 - `deletePackageOnApply` removes the applied archive after project changes are
   written, even if an `afterApply` command fails. It is `false` by default.
-- `deleteSourcePackageOnApply` removes the source snapshot referenced by a shift
-  archive only when its filename and SHA-256 both match. It is `false` by default.
+- `deleteSourcePackageOnApply` removes one safely identified source snapshot. It
+  first uses the exact filename and SHA-256 recorded by `package shift`; when that
+  reference is unavailable, it accepts exactly one snapshot beside the update
+  archive or in the project root whose manifest matches the project state before
+  apply. Ambiguous or changed archives are preserved. It is `false` by default.
 
 Hook commands run sequentially from the project root and receive
 `PACKAGE_HOOK`, `PACKAGE_COMMAND`, `PACKAGE_ROOT`, and `PACKAGE_ARCHIVE`.

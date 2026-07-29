@@ -100,7 +100,10 @@ is deleted after the project files are applied, even if an `afterApply` command
 reports an error.
 
 `deleteSourcePackageOnApply` also defaults to `false`. Update archives created by
-`package shift` record the source snapshot name and SHA-256. When cleanup is
+`package shift` record the source snapshot name and SHA-256. When that metadata
+is unavailable, the CLI safely looks next to the applied archive and in the
+project root for exactly one snapshot whose manifest matches the project state
+before apply. When cleanup is
 explicitly enabled, Package deletes only an exact matching regular file beside the
 update archive or in the project root; missing metadata, hash mismatches, symlinks,
 and failed or dry-run applies are preserved.
