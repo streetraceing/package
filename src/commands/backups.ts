@@ -6,6 +6,11 @@ import {
   restoreBackupVersion,
   selectBackupVersion,
 } from '../apply/backups.js';
+import {
+  DeletedCacheSession,
+  reportDeletedCache,
+} from '../util/deleted-cache.js';
+import { color, label, success } from '../util/terminal.js';
 
 function requireSelector(value: string | undefined, action: string): string {
   if (value) return value;
@@ -21,6 +26,7 @@ export async function backupCommand(
   cwd: string,
   json: boolean,
   yes: boolean,
+  saveDeletedCache = false,
 ): Promise<void> {
   const normalizedAction = action ?? 'list';
   if (normalizedAction === 'list') {
@@ -49,9 +55,9 @@ export async function backupCommand(
       );
       return;
     }
-    console.log(`Backup store: ${projectBackupDirectory(cwd)}`);
+    console.log(`${label('Backup store')} ${projectBackupDirectory(cwd)}`);
     if (versions.length === 0) {
-      console.log('No backup versions found for this project.');
+      console.log(color.dim('No backup versions found for this project.'));
       return;
     }
     for (const [index, version] of versions.entries()) {
@@ -60,7 +66,7 @@ export async function backupCommand(
         : '';
       const legacy = version.legacy ? ', legacy' : '';
       console.log(
-        `${index + 1}. ${version.id}  ${version.metadata.kind}, ${version.metadata.paths.length} paths${source}${legacy}`,
+        `${color.cyan(String(index + 1))}. ${version.id}  ${version.metadata.kind}, ${version.metadata.paths.length} paths${source}${legacy}`,
       );
     }
     return;
@@ -86,31 +92,41 @@ export async function backupCommand(
       );
       return;
     }
-    console.log(`Version: ${selected.id}`);
-    console.log(`Kind: ${selected.metadata.kind}`);
-    console.log(`Created: ${selected.metadata.createdAt}`);
-    console.log(`Project: ${selected.metadata.projectRoot}`);
-    console.log(`Paths: ${selected.metadata.paths.length}`);
-    console.log(`Archive: ${selected.archivePath}`);
+    console.log(`${label('Version')} ${color.bold(selected.id)}`);
+    console.log(`${label('Kind')} ${selected.metadata.kind}`);
+    console.log(`${label('Created')} ${selected.metadata.createdAt}`);
+    console.log(`${label('Project')} ${selected.metadata.projectRoot}`);
+    console.log(`${label('Paths')} ${selected.metadata.paths.length}`);
+    console.log(`${label('Archive')} ${selected.archivePath}`);
     if (selected.metadata.sourceArchive)
-      console.log(`Source package: ${selected.metadata.sourceArchive.name}`);
+      console.log(
+        `${label('Source package')} ${selected.metadata.sourceArchive.name}`,
+      );
     if (selected.metadata.restores?.length)
-      console.log(`Restores: ${selected.metadata.restores.join(', ')}`);
-    if (selected.legacy) console.log('Format: legacy project-local backup');
+      console.log(
+        `${label('Restores')} ${selected.metadata.restores.join(', ')}`,
+      );
+    if (selected.legacy)
+      console.log(color.dim('Format: legacy project-local backup'));
     return;
   }
 
   if (normalizedAction === 'restore') {
+    const deletedCache = saveDeletedCache
+      ? new DeletedCacheSession(cwd, 'backup-restore')
+      : undefined;
     const result = await restoreBackupVersion(
       cwd,
       requireSelector(selector, normalizedAction),
       yes,
+      deletedCache,
     );
-    console.log(
+    success(
       `Restored ${result.restoredVersions.length} backup version${result.restoredVersions.length === 1 ? '' : 's'} and ${result.changedPaths} paths.`,
     );
-    console.log(`Target version: ${result.selected.id}`);
-    console.log(`Recovery backup: ${result.recoveryBackupPath}`);
+    console.log(`${label('Target version')} ${result.selected.id}`);
+    console.log(`${label('Recovery backup')} ${result.recoveryBackupPath}`);
+    reportDeletedCache(deletedCache);
     return;
   }
 

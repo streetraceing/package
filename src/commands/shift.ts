@@ -15,6 +15,11 @@ import { sha256File } from '../util/hash.js';
 import { PackageError } from '../errors.js';
 import { packageManifestPath, packageShiftPath } from '../archive/metadata.js';
 import { runPackageHooks } from '../util/hooks.js';
+import {
+  DeletedCacheSession,
+  reportDeletedCache,
+} from '../util/deleted-cache.js';
+import { color, success } from '../util/terminal.js';
 
 export interface ShiftCommandOptions {
   output?: string;
@@ -168,10 +173,20 @@ export async function createShiftArchive(
     data: Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, 'utf8'),
     mode: 0o644,
   });
+  const deletedCache = config.saveDeletedCache
+    ? new DeletedCacheSession(config.root, 'shift', outputPath)
+    : undefined;
+  if (deletedCache)
+    await deletedCache.cachePath(
+      outputPath,
+      'replace-output-archive',
+      path.basename(outputPath),
+    );
   await writeZip(outputPath, entries, {
     compressionLevel: config.compressionLevel,
     deterministic: config.deterministic,
   });
+  reportDeletedCache(deletedCache, options.quiet);
   await runPackageHooks('afterPackage', config.afterPackage, {
     root: config.root,
     archivePath: outputPath,
@@ -180,11 +195,11 @@ export async function createShiftArchive(
   });
 
   if (!options.quiet) {
-    console.log(`Created ${outputPath}`);
+    success(`Created ${outputPath}`);
     console.log(
       `${payloadFiles.length} payload files, ${instructions.filter((item) => item.type !== 'BASE' && item.type !== 'MESSAGE').length} structural operations`,
     );
-    console.log(`Base ${base.manifest.rootHash}`);
+    console.log(`${color.cyan('Base')} ${base.manifest.rootHash}`);
   }
   return outputPath;
 }

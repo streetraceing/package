@@ -7,6 +7,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   rename,
   rm,
   unlink,
@@ -28,6 +29,7 @@ import {
   restoreBackupVersion,
 } from '../src/apply/backups.js';
 import type { ManifestFile, PackageManifest } from '../src/types.js';
+import { projectDeletedCacheDirectory } from '../src/util/deleted-cache.js';
 
 async function write(
   root: string,
@@ -936,6 +938,121 @@ test('stores versioned backups outside the project and restores older versions',
       'export const value = "two";\n',
     );
   } finally {
+    if (previousHome === undefined)
+      delete process.env.STREETRACEING_PACKAGE_HOME;
+    else process.env.STREETRACEING_PACKAGE_HOME = previousHome;
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test('caches files before apply deletion or replacement and warns for large files', async () => {
+  const workspace = await mkdtemp(
+    path.join(tmpdir(), 'package-deleted-cache-'),
+  );
+  const target = path.join(workspace, 'target-project');
+  const archivePath = path.join(workspace, 'update.zip');
+  const previousHome = process.env.STREETRACEING_PACKAGE_HOME;
+  const warnings: string[] = [];
+  const originalWarn = console.warn;
+  process.env.STREETRACEING_PACKAGE_HOME = path.join(workspace, 'package-home');
+  try {
+    await mkdir(target, { recursive: true });
+    await write(target, 'src/index.ts', 'old value\n');
+    const largeData = Buffer.alloc(10 * 1024 * 1024 + 1, 7);
+    await mkdir(path.join(target, 'src'), { recursive: true });
+    await writeFile(path.join(target, 'src/large.bin'), largeData);
+
+    await writeZip(
+      archivePath,
+      [
+        {
+          path: 'src/index.ts',
+          data: Buffer.from('new value\n', 'utf8'),
+          mode: 0o644,
+        },
+        {
+          path: '.packageshift',
+          data: Buffer.from(
+            'PACKAGESHIFT 1\n\nREMOVE "src/large.bin"\n',
+            'utf8',
+          ),
+          mode: 0o644,
+        },
+      ],
+      { compressionLevel: 9, deterministic: true },
+    );
+
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(' '));
+    };
+    await applyCommand(archivePath, {
+      cwd: target,
+      dryRun: false,
+      yes: true,
+      force: false,
+      backup: false,
+      conflictStrategy: 'overwrite',
+      deletePackageOnApply: true,
+      saveDeletedCache: true,
+    });
+
+    const cacheRoot = projectDeletedCacheDirectory(target);
+    const operationIds = await readdir(cacheRoot);
+    assert.equal(operationIds.length, 1);
+    const operationRoot = path.join(cacheRoot, operationIds[0] as string);
+    const metadata = JSON.parse(
+      await readFile(path.join(operationRoot, '.packagecache.json'), 'utf8'),
+    ) as {
+      entries: Array<{
+        displayPath: string;
+        storedPath: string;
+        size: number;
+      }>;
+    };
+    assert.ok(
+      metadata.entries.some((entry) => entry.displayPath === 'src/index.ts'),
+    );
+    assert.ok(
+      metadata.entries.some(
+        (entry) =>
+          entry.displayPath === 'src/large.bin' &&
+          entry.size === largeData.length,
+      ),
+    );
+    assert.ok(
+      metadata.entries.some((entry) => entry.displayPath === 'update.zip'),
+    );
+    const cachedLarge = metadata.entries.find(
+      (entry) => entry.displayPath === 'src/large.bin',
+    );
+    assert.ok(cachedLarge);
+    assert.deepEqual(
+      await readFile(
+        path.join(
+          operationRoot,
+          ...(cachedLarge as { storedPath: string }).storedPath.split('/'),
+        ),
+      ),
+      largeData,
+    );
+    assert.ok(
+      warnings.some(
+        (message) =>
+          message.includes('caching a large deleted file') &&
+          message.includes('src/large.bin'),
+      ),
+    );
+    await assert.rejects(readFile(archivePath), /ENOENT/);
+    await assert.rejects(
+      readFile(path.join(target, 'src/large.bin')),
+      /ENOENT/,
+    );
+    assert.equal(
+      await readFile(path.join(target, 'src/index.ts'), 'utf8'),
+      'new value\n',
+    );
+  } finally {
+    console.warn = originalWarn;
     if (previousHome === undefined)
       delete process.env.STREETRACEING_PACKAGE_HOME;
     else process.env.STREETRACEING_PACKAGE_HOME = previousHome;

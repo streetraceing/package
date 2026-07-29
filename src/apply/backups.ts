@@ -1,5 +1,4 @@
 import path from 'node:path';
-import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import {
   chmod,
@@ -18,6 +17,9 @@ import { PackageError } from '../errors.js';
 import { readZip, writeZip } from '../archive/zip.js';
 import { assertNoSymlinkAncestors, resolveInside } from '../util/path.js';
 import { sha256Buffer, sha256File } from '../util/hash.js';
+import { packageDataDirectory, projectStorageKey } from '../util/storage.js';
+import type { DeletedCacheSession } from '../util/deleted-cache.js';
+import { warning } from '../util/terminal.js';
 
 const backupMetadataPath = '.packagebackup.json';
 
@@ -63,32 +65,10 @@ export interface PersistBackupOptions {
   restores?: string[];
 }
 
-function normalizedProjectRoot(root: string): string {
-  const resolved = path.resolve(root);
-  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
-}
-
-function projectKey(root: string): string {
-  const name =
-    path
-      .basename(path.resolve(root))
-      .replace(/[^a-zA-Z0-9._-]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'project';
-  const digest = sha256Buffer(
-    Buffer.from(normalizedProjectRoot(root), 'utf8'),
-  ).slice('sha256:'.length, 'sha256:'.length + 12);
-  return `${name}-${digest}`;
-}
-
-export function packageDataDirectory(): string {
-  const override = process.env.STREETRACEING_PACKAGE_HOME;
-  return override
-    ? path.resolve(override)
-    : path.join(homedir(), 'streetraceing', '.package');
-}
+export { packageDataDirectory } from '../util/storage.js';
 
 export function projectBackupDirectory(root: string): string {
-  return path.join(packageDataDirectory(), 'backups', projectKey(root));
+  return path.join(packageDataDirectory(), 'backups', projectStorageKey(root));
 }
 
 async function existingFile(
@@ -390,14 +370,14 @@ export async function listBackupVersions(
     try {
       versions.push(await readBackupVersion(archivePath, root, false));
     } catch (error) {
-      console.warn(`Warning: ${(error as Error).message}`);
+      warning((error as Error).message);
     }
   }
   for (const archivePath of legacyPaths) {
     try {
       versions.push(await readBackupVersion(archivePath, root, true));
     } catch (error) {
-      console.warn(`Warning: ${(error as Error).message}`);
+      warning((error as Error).message);
     }
   }
   return versions.sort((left, right) =>
@@ -496,6 +476,7 @@ export async function restoreBackupVersion(
   root: string,
   selector: string,
   yes: boolean,
+  deletedCache?: DeletedCacheSession,
 ): Promise<{
   selected: BackupVersion;
   restoredVersions: BackupVersion[];
@@ -515,6 +496,16 @@ export async function restoreBackupVersion(
   }
   if (!(await confirmRestore(chain.length, paths.length, yes)))
     throw new PackageError('Backup restore cancelled.', 'BACKUP_CANCELLED');
+
+  if (deletedCache) {
+    for (const relativePath of paths) {
+      await deletedCache.cachePath(
+        resolveInside(root, relativePath),
+        'backup-restore',
+        relativePath,
+      );
+    }
+  }
 
   const recovery = await captureBackup(root, paths);
   const recoveryBackupPath = await persistBackup(root, recovery, {

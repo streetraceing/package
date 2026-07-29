@@ -25,6 +25,7 @@ import {
   rootHashForFiles,
 } from '../manifest/state.js';
 import { runPackageHooks } from '../util/hooks.js';
+import type { DeletedCacheSession } from '../util/deleted-cache.js';
 import { captureBackup, persistBackup, restoreBackupItems } from './backups.js';
 
 async function existingFile(
@@ -372,6 +373,39 @@ async function createApplyPlan(
   };
 }
 
+function destructivePaths(pkg: LoadedPackage, plan: ApplyPlan): string[] {
+  const paths = new Set<string>();
+  for (const file of pkg.manifest.files) {
+    if (!plan.skippedPaths.has(file.path)) paths.add(file.path);
+  }
+  for (const instruction of pkg.shift?.instructions ?? []) {
+    if (plan.skippedInstructions.has(instruction)) continue;
+    if (instruction.type === 'REMOVE' || instruction.type === 'REPLACE')
+      paths.add(instruction.path);
+    else if (instruction.type === 'MOVE') {
+      paths.add(instruction.from);
+      paths.add(instruction.to);
+    } else if (instruction.type === 'COPY') paths.add(instruction.to);
+  }
+  return [...paths].sort();
+}
+
+async function cacheDestructivePaths(
+  root: string,
+  pkg: LoadedPackage,
+  plan: ApplyPlan,
+  deletedCache?: DeletedCacheSession,
+): Promise<void> {
+  if (!deletedCache) return;
+  for (const relativePath of destructivePaths(pkg, plan)) {
+    await deletedCache.cachePath(
+      resolveInside(root, relativePath),
+      'apply-change',
+      relativePath,
+    );
+  }
+}
+
 async function executePackageChanges(
   pkg: LoadedPackage,
   options: ApplyOptions,
@@ -426,6 +460,7 @@ async function rollbackFailedApply(
 export async function applyPackage(
   pkg: LoadedPackage,
   options: ApplyOptions,
+  deletedCache?: DeletedCacheSession,
 ): Promise<ApplyResult> {
   const plan = await createApplyPlan(pkg, options);
   const skippedPaths = [...plan.skippedPaths].sort();
@@ -446,6 +481,7 @@ export async function applyPackage(
     command: 'apply',
   });
 
+  await cacheDestructivePaths(options.cwd, pkg, plan, deletedCache);
   const backup = await captureBackup(options.cwd, plan.activePaths);
   const backupPath = options.backup
     ? await persistBackup(options.cwd, backup, {

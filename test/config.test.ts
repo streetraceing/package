@@ -41,6 +41,7 @@ test('package init creates a schema-enabled .packagerc', async () => {
     assert.deepEqual(parsed.afterApply, []);
     assert.equal(parsed.deletePackageOnApply, false);
     assert.equal(parsed.deleteSourcePackageOnApply, false);
+    assert.equal(parsed.saveDeletedCache, true);
 
     const loaded = await loadConfig(workspace);
     assert.equal(loaded.config.$schema, configSchemaUrl);
@@ -141,6 +142,7 @@ test('configuration validates package hooks and apply cleanup settings', async (
           afterApply: ['npm run prepare'],
           deletePackageOnApply: true,
           deleteSourcePackageOnApply: true,
+          saveDeletedCache: false,
         },
         null,
         2,
@@ -154,6 +156,7 @@ test('configuration validates package hooks and apply cleanup settings', async (
     assert.deepEqual(loaded.config.afterApply, ['npm run prepare']);
     assert.equal(loaded.config.deletePackageOnApply, true);
     assert.equal(loaded.config.deleteSourcePackageOnApply, true);
+    assert.equal(loaded.config.saveDeletedCache, false);
 
     await writeFile(
       path.join(workspace, '.packagerc'),

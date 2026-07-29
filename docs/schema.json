@@ -3,7 +3,7 @@
   "$id": "https://streetraceing.github.io/package/schema.json",
   "title": "@streetraceing/package configuration",
   "description": "Strict JSON configuration for the @streetraceing/package CLI. Store this object in .packagerc or .packagerc.json.",
-  "markdownDescription": "Strict JSON configuration for `@streetraceing/package`. Store the object in `.packagerc` or `.packagerc.json`.\n\nAll options have conservative defaults: package and apply hooks are disabled, apply keeps the source archive, conflicts abort, and symbolic links are not followed.",
+  "markdownDescription": "Strict JSON configuration for `@streetraceing/package`. Store the object in `.packagerc` or `.packagerc.json`.\n\nAll options have conservative defaults: package and apply hooks are disabled, apply keeps source archives, conflicts abort, symbolic links are not followed, and deleted-file caching is enabled so destructive CLI operations remain recoverable.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -281,6 +281,13 @@
       "description": "Delete the exact source snapshot after a successful apply.",
       "markdownDescription": "`false` - Keep source snapshot archives. This is the non-destructive default and preserves existing behavior.\n\n`true` - After project files are applied and best-effort `afterApply` hooks run, delete one safely identified source snapshot. The CLI first uses the exact name and SHA-256 recorded by `package shift`. If that reference is unavailable, it searches only beside the applied archive and in the target project root for exactly one regular `.zip` snapshot whose embedded manifest matches the project state captured before apply. Ambiguous matches, symlinks, changed archives, missing metadata, dry runs, cancelled applies, validation failures, and rolled-back applies are never deleted.\n\n`--delete-source-package` - Enable this behavior for one apply.\n\n`--keep-source-package` - Disable it for one apply.",
       "examples": [false]
+    },
+    "saveDeletedCache": {
+      "type": "boolean",
+      "default": true,
+      "description": "Save files that the CLI is about to delete or replace in the user cache.",
+      "markdownDescription": "`true` - Before Package deletes or replaces a regular file, copy its current contents to the per-project deleted-file cache. The default location is `~/streetraceing/.package/cache/<project-id>/<operation-id>` on Linux and macOS and `%USERPROFILE%\\streetraceing\\.package\\cache\\<project-id>\\<operation-id>` on Windows. Each operation includes `.packagecache.json` metadata with original paths, reasons, sizes, modes, and SHA-256 values.\n\nCovered operations include project files removed or overwritten by `apply`, files replaced by `backup restore`, existing output archives replaced by `zip` or `shift`, `.packagerc` replaced by `init --force`, and archives removed by `deletePackageOnApply` or `deleteSourcePackageOnApply`. Files deleted by user-defined hook scripts cannot be intercepted.\n\nFiles larger than `10 MiB` are still cached, but the CLI prints a warning before continuing. Cache writes are performed before the destructive action; if a required cache write fails, Package does not perform that deletion or replacement.\n\n`false` - Do not create deleted-file cache copies. Versioned apply backups remain controlled separately by `backupOnApply`.\n\n`--save-deleted-cache` - Enable caching for one command.\n\n`--no-save-deleted-cache` - Disable caching for one command.",
+      "examples": [true, false]
     }
   },
   "examples": [

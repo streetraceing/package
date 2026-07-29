@@ -11,6 +11,11 @@ import {
   prepareSourcePackageCleanup,
   type SourcePackageCleanupPlan,
 } from '../apply/source-package.js';
+import {
+  DeletedCacheSession,
+  reportDeletedCache,
+} from '../util/deleted-cache.js';
+import { color, label, success, warning } from '../util/terminal.js';
 
 interface ApplyContext {
   archivePath: string;
@@ -19,31 +24,44 @@ interface ApplyContext {
 
 function cleanupWarning(message: string, error?: unknown): void {
   const detail = error instanceof Error ? `: ${error.message}` : '';
-  console.warn(`Warning: ${message}${detail}`);
+  warning(`${message}${detail}`);
 }
 
 async function deleteSourcePackage(
   plan: SourcePackageCleanupPlan,
+  deletedCache?: DeletedCacheSession,
 ): Promise<void> {
-  const result = await deletePreparedSourcePackage(plan);
+  const result = await deletePreparedSourcePackage(plan, deletedCache);
   if (result.deletedPath) {
     const suffix =
       plan.matchedBy === 'project-state'
         ? ' (matched project state before apply)'
         : '';
-    console.log(`Deleted source package: ${result.deletedPath}${suffix}`);
+    success(`Deleted source package: ${result.deletedPath}${suffix}`);
   } else if (result.warning) {
     cleanupWarning(result.warning);
   }
 }
 
-async function deleteAppliedPackage(archivePath: string): Promise<void> {
+async function deleteAppliedPackage(
+  archivePath: string,
+  deletedCache?: DeletedCacheSession,
+): Promise<void> {
   try {
+    if (deletedCache) {
+      await deletedCache.cachePath(
+        archivePath,
+        'delete-applied-package',
+        path.basename(archivePath),
+      );
+    }
     await rm(archivePath, { force: true });
-    console.log(`Deleted package: ${archivePath}`);
+    success(`Deleted package: ${archivePath}`);
   } catch (error) {
     cleanupWarning(
-      'changes were applied, but the package could not be deleted',
+      deletedCache
+        ? 'changes were applied, but the package could not be cached and deleted'
+        : 'changes were applied, but the package could not be deleted',
       error,
     );
   }
@@ -74,31 +92,32 @@ async function runAfterApplyHooks(
 async function runPostApplyLifecycle(
   options: ApplyOptions,
   context: ApplyContext,
-  sourceCleanupPlan?: SourcePackageCleanupPlan,
+  sourceCleanupPlan: SourcePackageCleanupPlan | undefined,
+  deletedCache?: DeletedCacheSession,
 ): Promise<void> {
   await runAfterApplyHooks(options, context);
   if (options.deleteSourcePackageOnApply && sourceCleanupPlan)
-    await deleteSourcePackage(sourceCleanupPlan);
+    await deleteSourcePackage(sourceCleanupPlan, deletedCache);
   if (options.deletePackageOnApply)
-    await deleteAppliedPackage(context.archivePath);
+    await deleteAppliedPackage(context.archivePath, deletedCache);
 }
 
 function printPackageMetadata(pkg: LoadedPackage, context: ApplyContext): void {
-  console.log(`Package: ${context.archivePath}`);
-  console.log(`Target:  ${context.projectRoot}`);
+  console.log(`${label('Package')} ${color.bold(context.archivePath)}`);
+  console.log(`${label('Target')}  ${context.projectRoot}`);
   if (pkg.manifestSource === 'generated') {
-    console.log(
-      'Warning: archive has no embedded manifest; applying ZIP-verified payload and .packageshift instructions without base verification.',
+    warning(
+      'archive has no embedded manifest; applying ZIP-verified payload and .packageshift instructions without base verification.',
     );
   } else if (pkg.manifestSource === 'legacy') {
-    console.log('Manifest: legacy .packagemanifest');
+    console.log(`${label('Manifest')} legacy .packagemanifest`);
   }
 }
 
 function printConflictPolicy(options: ApplyOptions): void {
-  if (options.force) console.log('Conflict policy: force');
+  if (options.force) console.log(`${label('Conflict policy')} force`);
   else if (options.conflictStrategy !== 'abort')
-    console.log(`Conflict policy: ${options.conflictStrategy}`);
+    console.log(`${label('Conflict policy')} ${options.conflictStrategy}`);
 }
 
 export async function applyCommand(
@@ -115,6 +134,14 @@ export async function applyCommand(
     !options.dryRun && options.deleteSourcePackageOnApply
       ? await prepareSourcePackageCleanup(pkg, context)
       : undefined;
+  const deletedCache =
+    !options.dryRun && options.saveDeletedCache === true
+      ? new DeletedCacheSession(
+          context.projectRoot,
+          'apply',
+          context.archivePath,
+        )
+      : undefined;
 
   printPackageMetadata(pkg, context);
   printConflictPolicy(options);
@@ -122,25 +149,39 @@ export async function applyCommand(
   console.log(formatChanges(comparison.changes));
   console.log('');
 
-  const result = await applyPackage(pkg, {
-    ...options,
-    cwd: context.projectRoot,
-  });
+  const result = await applyPackage(
+    pkg,
+    {
+      ...options,
+      cwd: context.projectRoot,
+    },
+    deletedCache,
+  );
   if (options.dryRun) {
     console.log(
-      `Dry run complete. ${result.changedPaths} paths may be changed.`,
+      `${color.cyan('Dry run complete.')} ${result.changedPaths} paths may be changed.`,
     );
   } else {
-    console.log(`Applied ${result.changedPaths} paths.`);
-    if (result.backupPath) console.log(`Backup: ${result.backupPath}`);
+    success(`Applied ${result.changedPaths} paths.`);
+    if (result.backupPath)
+      console.log(`${label('Backup')} ${result.backupPath}`);
   }
   if (result.overwrittenConflicts.length > 0)
     console.log(
-      `Overwritten conflicts: ${result.overwrittenConflicts.join(', ')}`,
+      `${label('Overwritten conflicts')} ${result.overwrittenConflicts.join(', ')}`,
     );
   if (result.skippedPaths.length > 0)
-    console.log(`Skipped conflicts: ${result.skippedPaths.join(', ')}`);
+    console.log(
+      `${label('Skipped conflicts')} ${result.skippedPaths.join(', ')}`,
+    );
 
-  if (!options.dryRun)
-    await runPostApplyLifecycle(options, context, sourceCleanupPlan);
+  if (!options.dryRun) {
+    await runPostApplyLifecycle(
+      options,
+      context,
+      sourceCleanupPlan,
+      deletedCache,
+    );
+    reportDeletedCache(deletedCache);
+  }
 }

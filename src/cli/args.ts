@@ -14,6 +14,7 @@ export interface ParsedArgs {
   backup?: boolean;
   deletePackageOnApply?: boolean;
   deleteSourcePackageOnApply?: boolean;
+  saveDeletedCache?: boolean;
   quiet: boolean;
   message?: string;
   conflictStrategy?: ConflictStrategy;
@@ -87,7 +88,13 @@ export function parseArgs(argv: string[]): ParsedArgs {
       parsed.deleteSourcePackageOnApply = true;
     else if (arg === '--keep-source-package')
       parsed.deleteSourcePackageOnApply = false;
-    else if (arg === '--quiet' || arg === '-q') parsed.quiet = true;
+    else if (arg === '--save-deleted-cache') {
+      parsed.saveDeletedCache = true;
+      parsed.configOverrides.saveDeletedCache = true;
+    } else if (arg === '--no-save-deleted-cache') {
+      parsed.saveDeletedCache = false;
+      parsed.configOverrides.saveDeletedCache = false;
+    } else if (arg === '--quiet' || arg === '-q') parsed.quiet = true;
     else if (arg === '--gitignore') parsed.configOverrides.gitignore = true;
     else if (arg === '--no-gitignore') parsed.configOverrides.gitignore = false;
     else if (arg === '--npmignore') parsed.configOverrides.npmignore = true;

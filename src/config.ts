@@ -36,6 +36,7 @@ export const defaultConfig: PackageConfig = {
   afterApply: [],
   deletePackageOnApply: false,
   deleteSourcePackageOnApply: false,
+  saveDeletedCache: true,
 };
 
 function parseJson(input: string, sourceName: string): unknown {
@@ -93,6 +94,7 @@ function validateConfig(
     'afterApply',
     'deletePackageOnApply',
     'deleteSourcePackageOnApply',
+    'saveDeletedCache',
   ]);
 
   for (const key of Object.keys(config)) {
@@ -138,6 +140,7 @@ function validateConfig(
     'renameDetection',
     'deletePackageOnApply',
     'deleteSourcePackageOnApply',
+    'saveDeletedCache',
   ] as const;
   for (const key of booleanKeys) {
     if (config[key] !== undefined && typeof config[key] !== 'boolean') {

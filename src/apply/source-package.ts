@@ -7,6 +7,7 @@ import {
   rootHashForFiles,
 } from '../manifest/state.js';
 import { sha256File } from '../util/hash.js';
+import type { DeletedCacheSession } from '../util/deleted-cache.js';
 
 export interface SourcePackageCleanupContext {
   archivePath: string;
@@ -184,6 +185,7 @@ export async function prepareSourcePackageCleanup(
 
 export async function deletePreparedSourcePackage(
   plan: SourcePackageCleanupPlan,
+  deletedCache?: DeletedCacheSession,
 ): Promise<{ deletedPath?: string; warning?: string }> {
   if (!plan.candidatePath || !plan.candidateHash)
     return { warning: plan.warning };
@@ -199,6 +201,19 @@ export async function deletePreparedSourcePackage(
       return {
         warning: `source package was not deleted because it changed after cleanup was prepared: ${plan.candidatePath}`,
       };
+    }
+    if (deletedCache) {
+      try {
+        await deletedCache.cachePath(
+          plan.candidatePath,
+          'delete-source-package',
+          path.basename(plan.candidatePath),
+        );
+      } catch (error) {
+        return {
+          warning: `source package was not deleted because it could not be saved to the deleted-file cache: ${(error as Error).message}`,
+        };
+      }
     }
     await rm(plan.candidatePath, { force: true });
     return { deletedPath: plan.candidatePath };

@@ -52,7 +52,8 @@ Run `npx @streetraceing/package --help` for the complete command reference.
   "beforeApply": [],
   "afterApply": ["npm run prepare"],
   "deletePackageOnApply": false,
-  "deleteSourcePackageOnApply": false
+  "deleteSourcePackageOnApply": false,
+  "saveDeletedCache": true
 }
 ```
 
@@ -71,6 +72,24 @@ Run `npx @streetraceing/package --help` for the complete command reference.
 
 Hook commands run sequentially from the project root and receive
 `PACKAGE_HOOK`, `PACKAGE_COMMAND`, `PACKAGE_ROOT`, and `PACKAGE_ARCHIVE`.
+
+## Deleted-file cache
+
+`saveDeletedCache` is `true` by default. Before a CLI-managed deletion or
+replacement, Package copies the previous regular file into
+`~/streetraceing/.package/cache/<project-id>/<operation-id>`; Windows resolves
+that path below `%USERPROFILE%`. A `.packagecache.json` file records original and
+cached paths, reasons, modes, sizes, and SHA-256 values.
+
+The cache covers destructive `apply` and `backup restore` changes, replacement of
+an existing ZIP output, `init --force`, and package/source-package cleanup.
+User-defined hook scripts are separate processes, so their own deletions cannot be
+captured. Files over 10 MiB are still saved and produce an explicit warning.
+Use `--no-save-deleted-cache` for one command or set `saveDeletedCache` to `false`
+to disable the feature.
+
+Interactive output uses ANSI colors for statuses, warnings, labels, and diff
+kinds. Redirected output stays plain; `NO_COLOR=1` disables colors explicitly.
 
 ## Backup versions
 

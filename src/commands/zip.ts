@@ -10,6 +10,11 @@ import { parseShift } from '../shift/parser.js';
 import { resolveInside } from '../util/path.js';
 import { runPackageHooks } from '../util/hooks.js';
 import {
+  DeletedCacheSession,
+  reportDeletedCache,
+} from '../util/deleted-cache.js';
+import { color, success, warning } from '../util/terminal.js';
+import {
   legacyPackageManifestPath,
   packageManifestPath,
   packageShiftPath,
@@ -112,8 +117,8 @@ export async function createSnapshot(
     config.sensitiveFiles === 'warn' &&
     !options.quiet
   ) {
-    console.warn(
-      `Warning: potentially sensitive files are included:\n${sensitive.map((file) => `  ${file}`).join('\n')}`,
+    warning(
+      `potentially sensitive files are included:\n${sensitive.map((file) => `  ${file}`).join('\n')}`,
     );
   }
   const { manifest, data } = await createManifest(files, config, 'snapshot');
@@ -140,10 +145,20 @@ export async function createSnapshot(
   });
   const shiftEntry = await readConfiguredShiftEntry(config);
   if (shiftEntry) entries.push(shiftEntry);
+  const deletedCache = config.saveDeletedCache
+    ? new DeletedCacheSession(config.root, 'zip', archivePath)
+    : undefined;
+  if (deletedCache)
+    await deletedCache.cachePath(
+      archivePath,
+      'replace-output-archive',
+      path.basename(archivePath),
+    );
   await writeZip(archivePath, entries, {
     compressionLevel: config.compressionLevel,
     deterministic: config.deterministic,
   });
+  reportDeletedCache(deletedCache, options.quiet);
   await runPackageHooks('afterPackage', config.afterPackage, {
     root: config.root,
     archivePath,
@@ -152,11 +167,12 @@ export async function createSnapshot(
   });
   if (!options.quiet) {
     const bytes = entries.reduce((sum, entry) => sum + entry.data.length, 0);
-    console.log(`Created ${archivePath}`);
+    success(`Created ${archivePath}`);
     console.log(
       `${manifest.files.length} files, ${bytes.toLocaleString('en-US')} source bytes`,
     );
-    if (manifest.rootHash) console.log(`Root ${manifest.rootHash}`);
+    if (manifest.rootHash)
+      console.log(`${color.cyan('Root')} ${manifest.rootHash}`);
   }
   return archivePath;
 }

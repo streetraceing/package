@@ -15,6 +15,7 @@ import {
 } from '../commands/meta.js';
 import { PackageError } from '../errors.js';
 import { backupCommand } from '../commands/backups.js';
+import { colorizeHelp } from '../util/terminal.js';
 
 async function readVersion(): Promise<string> {
   const candidates = [
@@ -47,7 +48,7 @@ function requirePositional(
 export async function main(argv = process.argv.slice(2)): Promise<void> {
   const args = parseArgs(argv);
   if (args.command === 'help') {
-    console.log(helpText);
+    console.log(colorizeHelp(helpText));
     return;
   }
   if (args.command === 'version') {
@@ -57,7 +58,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
 
   const cwd = path.resolve(args.cwd);
   if (args.command === 'init') {
-    await initCommand(cwd, args.force);
+    await initCommand(cwd, args.force, args.saveDeletedCache);
     return;
   }
 
@@ -105,6 +106,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
         args.deletePackageOnApply ?? config.deletePackageOnApply,
       deleteSourcePackageOnApply:
         args.deleteSourcePackageOnApply ?? config.deleteSourcePackageOnApply,
+      saveDeletedCache: args.saveDeletedCache ?? config.saveDeletedCache,
     });
   } else if (args.command === 'backup') {
     await backupCommand(
@@ -113,6 +115,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       config.root,
       args.json,
       args.yes,
+      args.saveDeletedCache ?? config.saveDeletedCache,
     );
   } else if (args.command === 'inspect') {
     await inspectCommand(

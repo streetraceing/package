@@ -2,6 +2,7 @@ import path from 'node:path';
 import { loadPackage } from '../manifest/load.js';
 import { comparePackageToProject } from './compare.js';
 import type { ProjectChange } from '../types.js';
+import { color, colorChangeKind, label } from '../util/terminal.js';
 
 function octal(mode: number | undefined): string {
   return mode === undefined ? '---' : mode.toString(8).padStart(3, '0');
@@ -9,19 +10,21 @@ function octal(mode: number | undefined): string {
 
 export function formatChanges(changes: ProjectChange[]): string {
   const visible = changes.filter((change) => change.kind !== 'UNCHANGED');
-  if (visible.length === 0) return 'No changes.';
+  if (visible.length === 0) return color.green('No changes.');
   const lines: string[] = [];
   for (const change of visible) {
     if (change.kind === 'MOVE' || change.kind === 'COPY') {
-      lines.push(`  ${change.kind.padEnd(8)} ${change.path}`);
+      lines.push(
+        `  ${colorChangeKind(change.kind, change.kind.padEnd(8))} ${change.path}`,
+      );
       lines.push(`           -> ${change.destination ?? ''}`);
     } else if (change.kind === 'MODE') {
       lines.push(
-        `  MODE     ${change.path} ${octal(change.beforeMode)} -> ${octal(change.afterMode)}`,
+        `  ${colorChangeKind('MODE', 'MODE    ')} ${change.path} ${octal(change.beforeMode)} -> ${octal(change.afterMode)}`,
       );
     } else {
       lines.push(
-        `  ${change.kind.padEnd(8)} ${change.path}${change.detail ? ` (${change.detail})` : ''}`,
+        `  ${colorChangeKind(change.kind, change.kind.padEnd(8))} ${change.path}${change.detail ? ` (${change.detail})` : ''}`,
       );
     }
   }
@@ -64,17 +67,20 @@ export async function diffCommand(
       ),
     );
   } else {
-    console.log(`Package: ${resolvedArchive}`);
-    console.log(`Target:  ${path.resolve(cwd)}`);
-    console.log(`Kind:    ${pkg.manifest.kind}`);
-    console.log(`Manifest: ${pkg.manifestSource}`);
+    console.log(`${label('Package')} ${color.bold(resolvedArchive)}`);
+    console.log(`${label('Target')}  ${path.resolve(cwd)}`);
+    console.log(`${label('Kind')}    ${pkg.manifest.kind}`);
+    console.log(`${label('Manifest')} ${pkg.manifestSource}`);
     if (pkg.manifestSource === 'generated')
       console.log(
-        'Safety:  no embedded manifest; base verification unavailable',
+        `${label('Safety')}  ${color.yellow('no embedded manifest; base verification unavailable')}`,
       );
     if (result.baseMatches === false)
-      console.log('Base:    mismatch (apply requires --force)');
-    else if (result.baseMatches === true) console.log('Base:    matches');
+      console.log(
+        `${label('Base')}    ${color.red('mismatch (apply requires --force)')}`,
+      );
+    else if (result.baseMatches === true)
+      console.log(`${label('Base')}    ${color.green('matches')}`);
     console.log('');
     console.log(formatChanges(result.changes));
   }

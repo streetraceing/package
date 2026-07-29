@@ -34,6 +34,7 @@ export interface PackageConfig {
   afterApply: string[];
   deletePackageOnApply: boolean;
   deleteSourcePackageOnApply: boolean;
+  saveDeletedCache: boolean;
 }
 
 export interface ManifestFile {
@@ -148,4 +149,5 @@ export interface ApplyOptions {
   afterApply?: string[];
   deletePackageOnApply?: boolean;
   deleteSourcePackageOnApply?: boolean;
+  saveDeletedCache?: boolean;
 }

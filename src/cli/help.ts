@@ -45,6 +45,8 @@ Apply options:
   --keep-package              Keep the applied archive (default)
   --delete-source-package     Delete the exact source snapshot referenced by a shift archive
   --keep-source-package       Keep the source snapshot (default)
+  --save-deleted-cache        Preserve deleted/replaced files in the user cache
+  --no-save-deleted-cache     Disable deleted-file caching for this command
   --conflict <strategy>       Handle local/hash conflicts: abort, overwrite, or skip
 
 Backup commands:
@@ -55,6 +57,11 @@ Backup commands:
 
 Backups are stored outside projects in:
   ~/streetraceing/.package/backups/<project-id>
+
+Deleted/replaced files are cached by default in:
+  ~/streetraceing/.package/cache/<project-id>/<operation-id>
+
+Files larger than 10 MiB are cached with a warning. Set NO_COLOR to disable ANSI colors.
 
 Shift options:
   --message <text>            Add a MESSAGE instruction

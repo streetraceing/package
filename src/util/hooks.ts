@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { PackageError } from '../errors.js';
+import { color, warning } from './terminal.js';
 
 export type PackageHookName =
   'beforePackage' | 'afterPackage' | 'beforeApply' | 'afterApply';
@@ -86,14 +87,15 @@ export async function runPackageHooks(
   const failures: PackageHookFailure[] = [];
 
   for (const script of scripts) {
-    if (!context.quiet) console.log(`${hook}: ${script}`);
+    if (!context.quiet)
+      console.log(`${color.magenta(hook)}: ${color.bold(script)}`);
     try {
       await runHookScript(script, hook, context);
     } catch (error) {
       const normalized = normalizeHookError(error);
       if (failureMode === 'throw') throw normalized;
       failures.push({ script, error: normalized });
-      console.warn(`Warning: ${normalized.message}`);
+      warning(normalized.message);
     }
   }
 

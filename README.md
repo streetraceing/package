@@ -13,7 +13,8 @@ copy of a project.
   permission changes;
 - comparison and dry-run support before an update is applied;
 - path, archive-integrity, base-project, and per-file conflict checks, with
-  versioned backups, rollback history, and recovery backups.
+  versioned backups, rollback history, recovery backups, and a deleted-file cache;
+- readable colorized terminal output with automatic plain-text fallback.
 
 Requires Node.js 18 or later.
 
@@ -85,7 +86,8 @@ Package lifecycle hooks and archive cleanup are opt-in:
   "beforeApply": [],
   "afterApply": ["npm run prepare"],
   "deletePackageOnApply": false,
-  "deleteSourcePackageOnApply": false
+  "deleteSourcePackageOnApply": false,
+  "saveDeletedCache": true
 }
 ```
 
@@ -103,10 +105,35 @@ reports an error.
 `package shift` record the source snapshot name and SHA-256. When that metadata
 is unavailable, the CLI safely looks next to the applied archive and in the
 project root for exactly one snapshot whose manifest matches the project state
-before apply. When cleanup is
-explicitly enabled, Package deletes only an exact matching regular file beside the
-update archive or in the project root; missing metadata, hash mismatches, symlinks,
-and failed or dry-run applies are preserved.
+before apply. When cleanup is explicitly enabled, Package deletes only an exact
+matching regular file beside the update archive or in the project root; missing
+metadata, hash mismatches, symlinks, and failed or dry-run applies are preserved.
+
+## Deleted-file cache
+
+`saveDeletedCache` defaults to `true`. Before Package itself removes or replaces a
+regular file, it saves the previous contents outside the project:
+
+```text
+~/streetraceing/.package/cache/<project-id>/<operation-id>
+```
+
+On Windows this is below `%USERPROFILE%\streetraceing\.package\cache`. Each
+operation contains the cached files and `.packagecache.json` metadata with the
+original path, deletion reason, size, mode, and SHA-256. The cache covers files
+replaced or removed by `apply`, `backup restore`, archive output replacement,
+`init --force`, `deletePackageOnApply`, and `deleteSourcePackageOnApply`.
+Commands inside lifecycle hooks run as separate shell processes, so files deleted
+by custom hooks cannot be intercepted.
+
+Files larger than 10 MiB are cached normally, but Package prints a warning before
+the destructive operation continues. A successful command prints the cache path
+and total saved size. Disable this behavior globally with
+`"saveDeletedCache": false` or once with `--no-save-deleted-cache`.
+
+Terminal output uses restrained ANSI colors when connected to an interactive
+terminal. Colors are automatically disabled for redirected output and JSON mode;
+set `NO_COLOR=1` to disable them explicitly.
 
 ## Backup history
 
