@@ -641,6 +641,84 @@ test('runs beforeApply and afterApply around successful apply', async () => {
   }
 });
 
+test('keeps apply successful when afterApply scripts fail', async () => {
+  const workspace = await mkdtemp(
+    path.join(tmpdir(), 'package-after-apply-warning-'),
+  );
+  const source = path.join(workspace, 'source-project');
+  const target = path.join(workspace, 'target-project');
+  const warnings: string[] = [];
+  const originalWarn = console.warn;
+  try {
+    await mkdir(source, { recursive: true });
+    await mkdir(target, { recursive: true });
+    await write(source, 'src/index.ts', 'export const value = "new";\n');
+    await write(target, 'src/index.ts', 'export const value = "old";\n');
+    await write(
+      target,
+      'scripts/fail-after-apply.cjs',
+      'process.exitCode = 7;\n',
+    );
+    await write(
+      target,
+      'scripts/log-after-apply.cjs',
+      "require('node:fs').writeFileSync('after-apply-continued.txt', 'yes\\n');\n",
+    );
+
+    const archive = await createSnapshot(
+      {
+        ...defaultConfig,
+        root: source,
+        output: workspace,
+        strategy: 'walk' as const,
+      },
+      { output: '../after-apply-warning.zip', quiet: true },
+    );
+
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(' '));
+    };
+    await applyCommand(archive, {
+      cwd: target,
+      dryRun: false,
+      yes: true,
+      force: false,
+      backup: false,
+      conflictStrategy: 'overwrite',
+      afterApply: [
+        'node scripts/fail-after-apply.cjs',
+        'node scripts/log-after-apply.cjs',
+      ],
+      deletePackageOnApply: true,
+    });
+
+    assert.equal(
+      await readFile(path.join(target, 'src/index.ts'), 'utf8'),
+      'export const value = "new";\n',
+    );
+    assert.equal(
+      await readFile(path.join(target, 'after-apply-continued.txt'), 'utf8'),
+      'yes\n',
+    );
+    await assert.rejects(readFile(archive), /ENOENT/);
+    assert.ok(
+      warnings.some((message) =>
+        message.includes('afterApply script failed (exit code 7)'),
+      ),
+    );
+    assert.ok(
+      warnings.some((message) =>
+        message.includes(
+          'Project changes remain applied and cleanup continues',
+        ),
+      ),
+    );
+  } finally {
+    console.warn = originalWarn;
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test('deletes only the exact source snapshot referenced by a shift archive', async () => {
   const workspace = await mkdtemp(
     path.join(tmpdir(), 'package-source-cleanup-'),

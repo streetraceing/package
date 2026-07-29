@@ -252,8 +252,8 @@
     },
     "afterApply": {
       "default": [],
-      "description": "Shell commands executed after archive changes are applied successfully.",
-      "markdownDescription": "Commands run sequentially from `root` only after all package changes are applied successfully. They run before `deletePackageOnApply`, so a failing command retains the source archive. An empty array preserves current behavior. The hook is not run for `--dry-run`, cancelled apply, validation failure, conflict abort, or rollback.\n\n`\"npm run prepare\"` - Run one command.\n\n`[\"npm install\", \"npm run build\"]` - Run multiple commands in order.\n\nAvailable environment variables:\n\n`PACKAGE_HOOK` - `afterApply`\n\n`PACKAGE_COMMAND` - `apply`\n\n`PACKAGE_ROOT` - Absolute target project root\n\n`PACKAGE_ARCHIVE` - Absolute source archive path",
+      "description": "Best-effort shell commands executed after archive changes are applied successfully.",
+      "markdownDescription": "Commands run sequentially from `root` only after all package changes are applied successfully. A non-zero exit or start error is reported as a warning: applied files are not rolled back, the CLI remains successful, remaining `afterApply` commands continue, and optional archive cleanup still runs. An empty array preserves current behavior. The hook is not run for `--dry-run`, cancelled apply, validation failure, conflict abort, or rollback.\n\n`\"npm run prepare\"` - Run one command.\n\n`[\"npm install\", \"npm run build\"]` - Run multiple commands in order, continuing after individual failures.\n\nAvailable environment variables:\n\n`PACKAGE_HOOK` - `afterApply`\n\n`PACKAGE_COMMAND` - `apply`\n\n`PACKAGE_ROOT` - Absolute target project root\n\n`PACKAGE_ARCHIVE` - Absolute source archive path",
       "examples": [[], "npm run prepare", ["npm install", "npm run build"]],
       "oneOf": [
         {
@@ -273,13 +273,13 @@
       "type": "boolean",
       "default": false,
       "description": "Delete the applied archive after a successful apply.",
-      "markdownDescription": "`false` - Keep the archive passed to `package apply`. This is the non-destructive default.\n\n`true` - Delete the applied archive only after all changes and `afterApply` commands complete successfully. The archive is retained during `--dry-run`, on validation errors, conflicts, cancellation, rollback, or hook failure.\n\n`--delete-package` - Enable this behavior for one apply.\n\n`--keep-package` - Disable it for one apply."
+      "markdownDescription": "`false` - Keep the archive passed to `package apply`. This is the non-destructive default.\n\n`true` - Delete the applied archive after project files are applied. Best-effort `afterApply` failures are warnings and do not prevent deletion. The archive is retained during `--dry-run`, on validation errors, conflicts, cancellation, or rollback.\n\n`--delete-package` - Enable this behavior for one apply.\n\n`--keep-package` - Disable it for one apply."
     },
     "deleteSourcePackageOnApply": {
       "type": "boolean",
       "default": false,
       "description": "Delete the exact source snapshot referenced by a successfully applied shift archive.",
-      "markdownDescription": "`false` - Keep the snapshot archive that was passed to `package shift`. This is the non-destructive default and preserves existing behavior.\n\n`true` - After `apply` and `afterApply` finish successfully, inspect the patch manifest for the source snapshot name and SHA-256 recorded by `package shift`. Delete only a regular file with that exact name and hash, searched first beside the applied update archive and then in the target project root. Symlinks, hash mismatches, missing metadata, dry runs, cancelled applies, and failed applies are never deleted.\n\n`--delete-source-package` - Enable this behavior for one apply.\n\n`--keep-source-package` - Disable it for one apply.",
+      "markdownDescription": "`false` - Keep the snapshot archive that was passed to `package shift`. This is the non-destructive default and preserves existing behavior.\n\n`true` - After project files are applied and best-effort `afterApply` hooks run, inspect the patch manifest for the source snapshot name and SHA-256 recorded by `package shift`. Delete only a regular file with that exact name and hash, searched first beside the applied update archive and then in the target project root. Symlinks, hash mismatches, missing metadata, dry runs, cancelled applies, validation failures, and rolled-back applies are never deleted.\n\n`--delete-source-package` - Enable this behavior for one apply.\n\n`--keep-source-package` - Disable it for one apply.",
       "examples": [false]
     }
   },

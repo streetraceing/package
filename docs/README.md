@@ -59,9 +59,10 @@ Run `npx @streetraceing/package --help` for the complete command reference.
 - `beforePackage` runs before file collection for `zip` and `shift`.
 - `afterPackage` runs after the archive is written.
 - `beforeApply` runs after validation and confirmation, before files change.
-- `afterApply` runs after a successful apply and before archive deletion.
-- `deletePackageOnApply` removes the applied archive only after apply and
-  `afterApply` complete successfully. It is `false` by default.
+- `afterApply` runs after a successful apply as a best-effort hook. A failed
+  command prints a warning; later hooks and cleanup still continue.
+- `deletePackageOnApply` removes the applied archive after project changes are
+  written, even if an `afterApply` command fails. It is `false` by default.
 - `deleteSourcePackageOnApply` removes the source snapshot referenced by a shift
   archive only when its filename and SHA-256 both match. It is `false` by default.
 

@@ -285,35 +285,62 @@ async function executeInstruction(
   }
 }
 
-export async function applyPackage(
-  pkg: LoadedPackage,
-  options: ApplyOptions,
-): Promise<{
+export interface ApplyResult {
   backupPath?: string;
   changedPaths: number;
   skippedPaths: string[];
   overwrittenConflicts: string[];
-}> {
-  const paths = affectedPaths(pkg);
-  await ensureSafePaths(options.cwd, paths);
-  if (pkg.manifest.baseFiles && pkg.manifest.baseRootHash && !options.force) {
-    const currentFiles = await readCurrentManifestFiles(
-      options.cwd,
-      pkg.manifest.baseFiles,
+}
+
+interface ApplyPlan {
+  activePaths: string[];
+  conflictStrategy: ConflictStrategy;
+  skippedInstructions: Set<ShiftInstruction>;
+  skippedPaths: Set<string>;
+  overwrittenConflicts: string[];
+}
+
+async function verifyPatchBase(
+  pkg: LoadedPackage,
+  options: ApplyOptions,
+): Promise<void> {
+  if (!pkg.manifest.baseFiles || !pkg.manifest.baseRootHash || options.force)
+    return;
+
+  const currentFiles = await readCurrentManifestFiles(
+    options.cwd,
+    pkg.manifest.baseFiles,
+  );
+  const currentHash = rootHashForFiles(currentFiles);
+  if (currentHash !== pkg.manifest.baseRootHash) {
+    throw new PackageError(
+      `Project does not match the patch base.\nExpected ${pkg.manifest.baseRootHash}\nCurrent  ${currentHash}\nReview with diff or pass --force.`,
+      'BASE_MISMATCH',
     );
-    const currentHash = rootHashForFiles(currentFiles);
-    if (currentHash !== pkg.manifest.baseRootHash) {
-      throw new PackageError(
-        `Project does not match the patch base.\nExpected ${pkg.manifest.baseRootHash}\nCurrent  ${currentHash}\nReview with diff or pass --force.`,
-        'BASE_MISMATCH',
-      );
-    }
   }
+}
+
+async function collectExpectedConflicts(
+  pkg: LoadedPackage,
+  root: string,
+): Promise<ExpectedConflict[]> {
   const conflicts: ExpectedConflict[] = [];
   for (const instruction of pkg.shift?.instructions ?? []) {
-    const conflict = await expectedConflict(options.cwd, instruction);
+    const conflict = await expectedConflict(root, instruction);
     if (conflict) conflicts.push(conflict);
   }
+  return conflicts;
+}
+
+async function createApplyPlan(
+  pkg: LoadedPackage,
+  options: ApplyOptions,
+): Promise<ApplyPlan> {
+  const paths = affectedPaths(pkg);
+  await ensureSafePaths(options.cwd, paths);
+  await verifyPatchBase(pkg, options);
+
+  const conflicts = await collectExpectedConflicts(pkg, options.cwd);
   const conflictStrategy =
     conflicts.length === 0
       ? options.conflictStrategy
@@ -321,6 +348,7 @@ export async function applyPackage(
   const skippedInstructions = new Set<ShiftInstruction>();
   const skippedPaths = new Set<string>();
   const overwrittenConflicts: string[] = [];
+
   for (const conflict of conflicts) {
     if (conflictStrategy === 'overwrite') {
       overwrittenConflicts.push(conflict.path);
@@ -334,14 +362,82 @@ export async function applyPackage(
     }
     throw new PackageError(conflictMessage(conflict), 'APPLY_CONFLICT');
   }
-  const activePaths = paths.filter((item) => !skippedPaths.has(item));
+
+  return {
+    activePaths: paths.filter((item) => !skippedPaths.has(item)),
+    conflictStrategy,
+    skippedInstructions,
+    skippedPaths,
+    overwrittenConflicts: overwrittenConflicts.sort(),
+  };
+}
+
+async function executePackageChanges(
+  pkg: LoadedPackage,
+  options: ApplyOptions,
+  plan: ApplyPlan,
+): Promise<void> {
+  const executionOptions: ApplyOptions = {
+    ...options,
+    conflictStrategy: plan.conflictStrategy,
+  };
+
+  for (const instruction of pkg.shift?.instructions ?? []) {
+    if (plan.skippedInstructions.has(instruction)) continue;
+    await executeInstruction(options.cwd, instruction, executionOptions);
+  }
+
+  for (const file of pkg.manifest.files) {
+    if (plan.skippedPaths.has(file.path)) continue;
+    const entry = pkg.entries.get(file.path);
+    if (!entry)
+      throw new PackageError(
+        `Archive payload is missing: ${file.path}`,
+        'ARCHIVE_INCOMPLETE',
+      );
+    const destination = await makeParent(options.cwd, file.path);
+    await writeFile(destination, entry.data);
+    await chmod(destination, file.mode & 0o777);
+  }
+}
+
+async function rollbackFailedApply(
+  root: string,
+  backup: Awaited<ReturnType<typeof captureBackup>>,
+  backupPath: string | undefined,
+  applyError: unknown,
+): Promise<never> {
+  try {
+    await restoreBackupItems(root, backup);
+    if (backupPath) await rm(backupPath, { force: true });
+  } catch (rollbackError) {
+    throw new PackageError(
+      `Apply failed and rollback also failed. Apply error: ${(applyError as Error).message}. Rollback error: ${(rollbackError as Error).message}`,
+      'APPLY_ROLLBACK_FAILED',
+    );
+  }
+
+  throw new PackageError(
+    `Apply failed and changes were rolled back: ${(applyError as Error).message}`,
+    'APPLY_ROLLBACK',
+  );
+}
+
+export async function applyPackage(
+  pkg: LoadedPackage,
+  options: ApplyOptions,
+): Promise<ApplyResult> {
+  const plan = await createApplyPlan(pkg, options);
+  const skippedPaths = [...plan.skippedPaths].sort();
+
   if (options.dryRun)
     return {
-      changedPaths: activePaths.length,
-      skippedPaths: [...skippedPaths].sort(),
-      overwrittenConflicts: overwrittenConflicts.sort(),
+      changedPaths: plan.activePaths.length,
+      skippedPaths,
+      overwrittenConflicts: plan.overwrittenConflicts,
     };
-  if (!(await shouldProceed(options, activePaths.length)))
+
+  if (!(await shouldProceed(options, plan.activePaths.length)))
     throw new PackageError('Apply cancelled.', 'APPLY_CANCELLED');
 
   await runPackageHooks('beforeApply', options.beforeApply ?? [], {
@@ -350,42 +446,24 @@ export async function applyPackage(
     command: 'apply',
   });
 
-  const backup = await captureBackup(options.cwd, activePaths);
+  const backup = await captureBackup(options.cwd, plan.activePaths);
   const backupPath = options.backup
     ? await persistBackup(options.cwd, backup, {
         kind: 'apply',
         sourceArchivePath: pkg.archivePath,
       })
     : undefined;
+
   try {
-    for (const instruction of pkg.shift?.instructions ?? []) {
-      if (skippedInstructions.has(instruction)) continue;
-      await executeInstruction(options.cwd, instruction, options);
-    }
-    for (const file of pkg.manifest.files) {
-      if (skippedPaths.has(file.path)) continue;
-      const entry = pkg.entries.get(file.path);
-      if (!entry)
-        throw new PackageError(
-          `Archive payload is missing: ${file.path}`,
-          'ARCHIVE_INCOMPLETE',
-        );
-      const destination = await makeParent(options.cwd, file.path);
-      await writeFile(destination, entry.data);
-      await chmod(destination, file.mode & 0o777);
-    }
+    await executePackageChanges(pkg, options, plan);
   } catch (error) {
-    await restoreBackupItems(options.cwd, backup);
-    if (backupPath) await rm(backupPath, { force: true });
-    throw new PackageError(
-      `Apply failed and changes were rolled back: ${(error as Error).message}`,
-      'APPLY_ROLLBACK',
-    );
+    return rollbackFailedApply(options.cwd, backup, backupPath, error);
   }
+
   return {
     backupPath,
-    changedPaths: activePaths.length,
-    skippedPaths: [...skippedPaths].sort(),
-    overwrittenConflicts: overwrittenConflicts.sort(),
+    changedPaths: plan.activePaths.length,
+    skippedPaths,
+    overwrittenConflicts: plan.overwrittenConflicts,
   };
 }

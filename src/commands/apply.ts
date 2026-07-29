@@ -8,27 +8,39 @@ import { formatChanges } from './diff.js';
 import { runPackageHooks } from '../util/hooks.js';
 import { sha256File } from '../util/hash.js';
 
+interface ApplyContext {
+  archivePath: string;
+  projectRoot: string;
+}
+
+function cleanupWarning(message: string, error?: unknown): void {
+  const detail = error instanceof Error ? `: ${error.message}` : '';
+  console.warn(`Warning: ${message}${detail}`);
+}
+
 async function deleteSourcePackage(
   pkg: LoadedPackage,
-  appliedArchivePath: string,
-  projectRoot: string,
+  context: ApplyContext,
 ): Promise<void> {
   const source = pkg.manifest.sourcePackage;
   if (!source) {
-    console.warn(
-      'Warning: source package cleanup was requested, but this archive does not identify the snapshot used to create it.',
+    cleanupWarning(
+      'source package cleanup was requested, but this archive does not identify the snapshot used to create it.',
     );
     return;
   }
+
   const candidates = [
-    path.join(path.dirname(appliedArchivePath), source.name),
-    path.join(projectRoot, source.name),
+    path.join(path.dirname(context.archivePath), source.name),
+    path.join(context.projectRoot, source.name),
   ];
   const seen = new Set<string>();
+
   for (const candidate of candidates) {
     const resolved = path.resolve(candidate);
-    if (resolved === appliedArchivePath || seen.has(resolved)) continue;
+    if (resolved === context.archivePath || seen.has(resolved)) continue;
     seen.add(resolved);
+
     try {
       const fileStat = await lstat(resolved);
       if (!fileStat.isFile() || fileStat.isSymbolicLink()) continue;
@@ -38,26 +50,65 @@ async function deleteSourcePackage(
       return;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
-      console.warn(
-        `Warning: source package cleanup failed for ${resolved}: ${(error as Error).message}`,
-      );
+      cleanupWarning(`source package cleanup failed for ${resolved}`, error);
       return;
     }
   }
-  console.warn(
-    `Warning: source package ${source.name} was not deleted because no exact SHA-256 match was found next to the applied archive or in the project root.`,
+
+  cleanupWarning(
+    `source package ${source.name} was not deleted because no exact SHA-256 match was found next to the applied archive or in the project root.`,
   );
 }
 
-export async function applyCommand(
-  archivePath: string,
+async function deleteAppliedPackage(archivePath: string): Promise<void> {
+  try {
+    await rm(archivePath, { force: true });
+    console.log(`Deleted package: ${archivePath}`);
+  } catch (error) {
+    cleanupWarning(
+      'changes were applied, but the package could not be deleted',
+      error,
+    );
+  }
+}
+
+async function runAfterApplyHooks(
   options: ApplyOptions,
+  context: ApplyContext,
 ): Promise<void> {
-  const resolvedArchive = path.resolve(options.cwd, archivePath);
-  const pkg = await loadPackage(resolvedArchive);
-  const comparison = await comparePackageToProject(pkg, options.cwd);
-  console.log(`Package: ${resolvedArchive}`);
-  console.log(`Target:  ${path.resolve(options.cwd)}`);
+  const failures = await runPackageHooks(
+    'afterApply',
+    options.afterApply ?? [],
+    {
+      root: context.projectRoot,
+      archivePath: context.archivePath,
+      command: 'apply',
+    },
+    { failureMode: 'warn' },
+  );
+
+  if (failures.length > 0) {
+    cleanupWarning(
+      `${failures.length} afterApply script${failures.length === 1 ? '' : 's'} failed. Project changes remain applied and cleanup continues.`,
+    );
+  }
+}
+
+async function runPostApplyLifecycle(
+  pkg: LoadedPackage,
+  options: ApplyOptions,
+  context: ApplyContext,
+): Promise<void> {
+  await runAfterApplyHooks(options, context);
+  if (options.deleteSourcePackageOnApply)
+    await deleteSourcePackage(pkg, context);
+  if (options.deletePackageOnApply)
+    await deleteAppliedPackage(context.archivePath);
+}
+
+function printPackageMetadata(pkg: LoadedPackage, context: ApplyContext): void {
+  console.log(`Package: ${context.archivePath}`);
+  console.log(`Target:  ${context.projectRoot}`);
   if (pkg.manifestSource === 'generated') {
     console.log(
       'Warning: archive has no embedded manifest; applying ZIP-verified payload and .packageshift instructions without base verification.',
@@ -65,13 +116,35 @@ export async function applyCommand(
   } else if (pkg.manifestSource === 'legacy') {
     console.log('Manifest: legacy .packagemanifest');
   }
+}
+
+function printConflictPolicy(options: ApplyOptions): void {
   if (options.force) console.log('Conflict policy: force');
   else if (options.conflictStrategy !== 'abort')
     console.log(`Conflict policy: ${options.conflictStrategy}`);
+}
+
+export async function applyCommand(
+  archivePath: string,
+  options: ApplyOptions,
+): Promise<void> {
+  const context: ApplyContext = {
+    archivePath: path.resolve(options.cwd, archivePath),
+    projectRoot: path.resolve(options.cwd),
+  };
+  const pkg = await loadPackage(context.archivePath);
+  const comparison = await comparePackageToProject(pkg, context.projectRoot);
+
+  printPackageMetadata(pkg, context);
+  printConflictPolicy(options);
   console.log('');
   console.log(formatChanges(comparison.changes));
   console.log('');
-  const result = await applyPackage(pkg, options);
+
+  const result = await applyPackage(pkg, {
+    ...options,
+    cwd: context.projectRoot,
+  });
   if (options.dryRun) {
     console.log(
       `Dry run complete. ${result.changedPaths} paths may be changed.`,
@@ -86,23 +159,6 @@ export async function applyCommand(
     );
   if (result.skippedPaths.length > 0)
     console.log(`Skipped conflicts: ${result.skippedPaths.join(', ')}`);
-  if (!options.dryRun) {
-    await runPackageHooks('afterApply', options.afterApply ?? [], {
-      root: path.resolve(options.cwd),
-      archivePath: resolvedArchive,
-      command: 'apply',
-    });
-  }
-  if (!options.dryRun && options.deleteSourcePackageOnApply)
-    await deleteSourcePackage(pkg, resolvedArchive, path.resolve(options.cwd));
-  if (!options.dryRun && options.deletePackageOnApply) {
-    try {
-      await rm(resolvedArchive, { force: true });
-      console.log(`Deleted package: ${resolvedArchive}`);
-    } catch (error) {
-      console.warn(
-        `Warning: changes were applied, but the package could not be deleted: ${(error as Error).message}`,
-      );
-    }
-  }
+
+  if (!options.dryRun) await runPostApplyLifecycle(pkg, options, context);
 }

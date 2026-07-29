@@ -4,6 +4,7 @@ import { PackageError } from '../errors.js';
 export type PackageHookName =
   'beforePackage' | 'afterPackage' | 'beforeApply' | 'afterApply';
 export type PackageCommandName = 'zip' | 'shift' | 'apply';
+export type HookFailureMode = 'throw' | 'warn';
 
 export interface PackageHookContext {
   root: string;
@@ -12,7 +13,27 @@ export interface PackageHookContext {
   quiet?: boolean;
 }
 
-function runShellCommand(
+export interface PackageHookFailure {
+  script: string;
+  error: PackageError;
+}
+
+export interface RunPackageHooksOptions {
+  failureMode?: HookFailureMode;
+}
+
+function packageHookError(
+  hook: PackageHookName,
+  script: string,
+  detail: string,
+): PackageError {
+  return new PackageError(
+    `${hook} script failed (${detail}): ${script}`,
+    'PACKAGE_HOOK_FAILED',
+  );
+}
+
+function runHookScript(
   script: string,
   hook: PackageHookName,
   context: PackageHookContext,
@@ -32,44 +53,49 @@ function runShellCommand(
     });
 
     child.once('error', (error) => {
-      reject(
-        new PackageError(
-          `Cannot start ${hook} script ${JSON.stringify(script)}: ${error.message}`,
-          'PACKAGE_HOOK_FAILED',
-        ),
-      );
+      reject(packageHookError(hook, script, `cannot start: ${error.message}`));
     });
     child.once('close', (code, signal) => {
       if (code === 0) {
         resolve();
         return;
       }
-      const status = signal
+      const detail = signal
         ? `signal ${signal}`
         : `exit code ${code ?? 'unknown'}`;
-      const retained =
-        hook === 'afterPackage'
-          ? ` The created archive was retained at ${context.archivePath}.`
-          : hook === 'afterApply'
-            ? ` Applied changes were retained. The source archive was retained at ${context.archivePath}.`
-            : '';
-      reject(
-        new PackageError(
-          `${hook} script failed with ${status}: ${script}.${retained}`,
-          'PACKAGE_HOOK_FAILED',
-        ),
-      );
+      reject(packageHookError(hook, script, detail));
     });
   });
+}
+
+function normalizeHookError(error: unknown): PackageError {
+  if (error instanceof PackageError) return error;
+  return new PackageError(
+    error instanceof Error ? error.message : String(error),
+    'PACKAGE_HOOK_FAILED',
+  );
 }
 
 export async function runPackageHooks(
   hook: PackageHookName,
   scripts: readonly string[],
   context: PackageHookContext,
-): Promise<void> {
+  options: RunPackageHooksOptions = {},
+): Promise<PackageHookFailure[]> {
+  const failureMode = options.failureMode ?? 'throw';
+  const failures: PackageHookFailure[] = [];
+
   for (const script of scripts) {
     if (!context.quiet) console.log(`${hook}: ${script}`);
-    await runShellCommand(script, hook, context);
+    try {
+      await runHookScript(script, hook, context);
+    } catch (error) {
+      const normalized = normalizeHookError(error);
+      if (failureMode === 'throw') throw normalized;
+      failures.push({ script, error: normalized });
+      console.warn(`Warning: ${normalized.message}`);
+    }
   }
+
+  return failures;
 }

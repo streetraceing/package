@@ -90,12 +90,14 @@ Package lifecycle hooks and archive cleanup are opt-in:
 ```
 
 `beforePackage` and `afterPackage` run around `zip` and `shift`. `beforeApply`
-runs after validation and confirmation but before files are changed; `afterApply`
-runs only after a successful apply and before optional archive deletion. Hooks
-run sequentially from the project root and receive `PACKAGE_HOOK`,
+runs after validation and confirmation but before files are changed. `afterApply`
+runs after a successful apply as a best-effort hook: failed commands produce
+warnings, do not roll back project changes, and do not stop later hooks or archive
+cleanup. Hooks run sequentially from the project root and receive `PACKAGE_HOOK`,
 `PACKAGE_COMMAND`, `PACKAGE_ROOT`, and `PACKAGE_ARCHIVE`. Empty arrays run
 nothing. `deletePackageOnApply` defaults to `false`; when enabled, the applied ZIP
-is deleted only after apply and `afterApply` complete successfully.
+is deleted after the project files are applied, even if an `afterApply` command
+reports an error.
 
 `deleteSourcePackageOnApply` also defaults to `false`. Update archives created by
 `package shift` record the source snapshot name and SHA-256. When cleanup is
