@@ -61,6 +61,12 @@ src/api/client.ts
 
 Use forward slashes on every operating system. Absolute paths, drive-letter paths, NUL bytes, and paths containing `..` are rejected.
 
+`.packageshift`, `.packagemanifest.json`, and `.packagemanifest` are reserved
+CLI metadata paths. Instructions cannot target them, and `.packageshift` is
+never extracted into the project as payload. Older archives that incorrectly
+list reserved metadata in their manifest are accepted with a warning and those
+entries are ignored during `diff` and `apply`.
+
 ## Validation
 
 Validate an archive and parse its shift file without changing the project:

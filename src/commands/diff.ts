@@ -2,7 +2,7 @@ import path from 'node:path';
 import { loadPackage } from '../manifest/load.js';
 import { comparePackageToProject } from './compare.js';
 import type { ProjectChange } from '../types.js';
-import { color, colorChangeKind, label } from '../util/terminal.js';
+import { color, colorChangeKind, label, warning } from '../util/terminal.js';
 
 function octal(mode: number | undefined): string {
   return mode === undefined ? '---' : mode.toString(8).padStart(3, '0');
@@ -60,6 +60,7 @@ export async function diffCommand(
           kind: pkg.manifest.kind,
           manifestSource: pkg.manifestSource,
           baseMatches: result.baseMatches,
+          ignoredPayloadMetadataPaths: pkg.ignoredPayloadMetadataPaths,
           changes: visible,
         },
         null,
@@ -71,6 +72,10 @@ export async function diffCommand(
     console.log(`${label('Target')}  ${path.resolve(cwd)}`);
     console.log(`${label('Kind')}    ${pkg.manifest.kind}`);
     console.log(`${label('Manifest')} ${pkg.manifestSource}`);
+    if (pkg.ignoredPayloadMetadataPaths.length > 0)
+      warning(
+        `reserved CLI metadata listed as payload was ignored: ${pkg.ignoredPayloadMetadataPaths.join(', ')}`,
+      );
     if (pkg.manifestSource === 'generated')
       console.log(
         `${label('Safety')}  ${color.yellow('no embedded manifest; base verification unavailable')}`,

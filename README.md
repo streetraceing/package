@@ -77,6 +77,11 @@ Snapshot archives contain all selected files and a generated
 `.packageshift` format describes removals, moves, copies, replacements, and
 permission changes that ZIP contents alone cannot represent.
 
+`.packageshift` is always CLI metadata, never project payload. It is parsed in
+place and is never copied into the target project. If an older or manually
+assembled manifest incorrectly lists it as a payload file, Package ignores that
+entry and prints a warning instead of extracting it.
+
 Package lifecycle hooks and archive cleanup are opt-in:
 
 ```json

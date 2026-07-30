@@ -27,6 +27,7 @@ import {
 import { runPackageHooks } from '../util/hooks.js';
 import type { DeletedCacheSession } from '../util/deleted-cache.js';
 import { captureBackup, persistBackup, restoreBackupItems } from './backups.js';
+import { packagePayloadFiles } from '../archive/metadata.js';
 
 async function existingFile(
   root: string,
@@ -53,7 +54,9 @@ async function existingFile(
 }
 
 function affectedPaths(pkg: LoadedPackage): string[] {
-  const paths = new Set(pkg.manifest.files.map((file) => file.path));
+  const paths = new Set(
+    packagePayloadFiles(pkg.manifest.files).map((file) => file.path),
+  );
   for (const instruction of pkg.shift?.instructions ?? []) {
     if (
       instruction.type === 'REMOVE' ||
@@ -375,7 +378,7 @@ async function createApplyPlan(
 
 function destructivePaths(pkg: LoadedPackage, plan: ApplyPlan): string[] {
   const paths = new Set<string>();
-  for (const file of pkg.manifest.files) {
+  for (const file of packagePayloadFiles(pkg.manifest.files)) {
     if (!plan.skippedPaths.has(file.path)) paths.add(file.path);
   }
   for (const instruction of pkg.shift?.instructions ?? []) {
@@ -421,7 +424,7 @@ async function executePackageChanges(
     await executeInstruction(options.cwd, instruction, executionOptions);
   }
 
-  for (const file of pkg.manifest.files) {
+  for (const file of packagePayloadFiles(pkg.manifest.files)) {
     if (plan.skippedPaths.has(file.path)) continue;
     const entry = pkg.entries.get(file.path);
     if (!entry)

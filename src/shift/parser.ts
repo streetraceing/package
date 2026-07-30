@@ -1,6 +1,7 @@
 import { ShiftSyntaxError } from '../errors.js';
 import type { ParsedShift, ShiftInstruction } from '../types.js';
 import { normalizeRelativePath } from '../util/path.js';
+import { isReservedPackageMetadataPath } from '../archive/metadata.js';
 import { tokenizeShift, type ShiftToken } from './tokenizer.js';
 
 function fail(
@@ -64,6 +65,24 @@ function stringToken(
       'PS1005',
     );
   }
+}
+
+function packagePathToken(
+  token: ShiftToken | undefined,
+  sourceName: string,
+  label: string,
+): string {
+  const value = stringToken(token, sourceName, label);
+  if (isReservedPackageMetadataPath(value)) {
+    fail(
+      token as ShiftToken,
+      sourceName,
+      `Reserved package metadata cannot be targeted: ${value}`,
+      '.packageshift and manifest files are CLI metadata, not project payload.',
+      'PS1009',
+    );
+  }
+  return value;
 }
 
 function hashToken(token: ShiftToken | undefined, sourceName: string): string {
@@ -174,7 +193,7 @@ export function parseShift(
         );
       instructions.push({
         type: 'REMOVE',
-        path: stringToken(tokens[1], sourceName, 'REMOVE path'),
+        path: packagePathToken(tokens[1], sourceName, 'REMOVE path'),
         expectedHash: optionalHash(tokens, 2, sourceName),
         line: commandToken.line,
       });
@@ -196,8 +215,8 @@ export function parseShift(
         );
       instructions.push({
         type: 'MOVE',
-        from: stringToken(tokens[1], sourceName, 'MOVE source'),
-        to: stringToken(tokens[3], sourceName, 'MOVE destination'),
+        from: packagePathToken(tokens[1], sourceName, 'MOVE source'),
+        to: packagePathToken(tokens[3], sourceName, 'MOVE destination'),
         expectedHash: optionalHash(tokens, 4, sourceName),
         line: commandToken.line,
       });
@@ -213,8 +232,8 @@ export function parseShift(
         );
       instructions.push({
         type: 'COPY',
-        from: stringToken(tokens[1], sourceName, 'COPY source'),
-        to: stringToken(tokens[3], sourceName, 'COPY destination'),
+        from: packagePathToken(tokens[1], sourceName, 'COPY source'),
+        to: packagePathToken(tokens[3], sourceName, 'COPY destination'),
         line: commandToken.line,
       });
     } else if (command === 'REPLACE') {
@@ -227,7 +246,7 @@ export function parseShift(
         );
       instructions.push({
         type: 'REPLACE',
-        path: stringToken(tokens[1], sourceName, 'REPLACE path'),
+        path: packagePathToken(tokens[1], sourceName, 'REPLACE path'),
         expectedHash: optionalHash(tokens, 2, sourceName),
         line: commandToken.line,
       });
@@ -244,7 +263,7 @@ export function parseShift(
         );
       instructions.push({
         type: 'CHMOD',
-        path: stringToken(tokens[1], sourceName, 'CHMOD path'),
+        path: packagePathToken(tokens[1], sourceName, 'CHMOD path'),
         mode: Number.parseInt(rawMode.value, 8) & 0o777,
         line: commandToken.line,
       });

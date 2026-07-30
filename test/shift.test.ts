@@ -45,3 +45,21 @@ test('rejects paths outside the project', () => {
     /Path escapes the project root/,
   );
 });
+
+test('rejects instructions that target reserved package metadata', () => {
+  assert.throws(
+    () =>
+      parseShift(
+        'PACKAGESHIFT 1\nCOPY "src/template.txt" TO ".packageshift"\n',
+      ),
+    (error: unknown) => {
+      assert.ok(error instanceof ShiftSyntaxError);
+      assert.match(
+        error.message,
+        /Reserved package metadata cannot be targeted/,
+      );
+      assert.match(error.message, /PS1009/);
+      return true;
+    },
+  );
+});

@@ -136,6 +136,7 @@ export interface LoadedPackage {
   manifestSource: ManifestSource;
   shift?: ParsedShift;
   entries: Map<string, ReadArchiveEntry>;
+  ignoredPayloadMetadataPaths: string[];
 }
 
 export interface ApplyOptions {

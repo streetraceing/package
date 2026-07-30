@@ -119,6 +119,8 @@ every newer delta. The recovery version can be selected later to undo the rollba
   dependencies, package metadata, and backup directories are always excluded.
 - **Structured updates:** update archives carry payload files, a manifest, and
   `.packageshift` instructions for operations ZIP entries cannot express.
+  `.packageshift` remains reserved CLI metadata and is never written into the
+  target project, even when a malformed legacy manifest lists it as payload.
 - **Conflict-aware application:** use `diff` or `apply --dry-run` to review
   changes, then select `abort`, `overwrite`, or `skip` conflict handling when
   needed.

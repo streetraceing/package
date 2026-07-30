@@ -6,6 +6,7 @@ import type {
 } from '../types.js';
 import { sha256Buffer } from '../util/hash.js';
 import { resolveInside } from '../util/path.js';
+import { packagePayloadFiles } from '../archive/metadata.js';
 import {
   readCurrentManifestFiles,
   rootHashForFiles,
@@ -132,7 +133,7 @@ export async function comparePackageToProject(
     if (instruction.type === 'REPLACE' && instruction.expectedHash)
       expectedPayloadHashes.set(instruction.path, instruction.expectedHash);
   }
-  for (const file of pkg.manifest.files) {
+  for (const file of packagePayloadFiles(pkg.manifest.files)) {
     const current = await fileState(root, file.path);
     const expectedHash = expectedPayloadHashes.get(file.path);
     if (current && expectedHash && current.hash !== expectedHash) {

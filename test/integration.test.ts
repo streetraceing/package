@@ -183,6 +183,97 @@ test('snapshot reserves manifest files and embeds the configured shift metadata'
   }
 });
 
+test('never applies .packageshift when a manifest incorrectly lists it as payload', async () => {
+  const workspace = await mkdtemp(
+    path.join(tmpdir(), 'package-reserved-payload-'),
+  );
+  const target = path.join(workspace, 'target-project');
+  const archivePath = path.join(workspace, 'update.zip');
+  try {
+    await mkdir(target, { recursive: true });
+    const sourceData = Buffer.from('export const value = 2;\n', 'utf8');
+    const shiftData = Buffer.from(
+      'PACKAGESHIFT 1\n\nMESSAGE "Instruction metadata only"\n',
+      'utf8',
+    );
+    const files: ManifestFile[] = [
+      {
+        path: '.packageshift',
+        size: shiftData.length,
+        mode: 0o644,
+        sha256: sha256Buffer(shiftData),
+      },
+      {
+        path: 'src/index.ts',
+        size: sourceData.length,
+        mode: 0o644,
+        sha256: sha256Buffer(sourceData),
+      },
+    ];
+    const manifest: PackageManifest = {
+      schemaVersion: 1,
+      kind: 'patch',
+      project: 'reserved-payload',
+      createdAt: new Date(0).toISOString(),
+      rootHash: sha256Buffer(Buffer.from(stableJson(files), 'utf8')),
+      config: {
+        strategy: 'walk',
+        gitignore: false,
+        npmignore: false,
+        dot: true,
+      },
+      files,
+    };
+
+    await writeZip(
+      archivePath,
+      [
+        { path: '.packageshift', data: shiftData, mode: 0o644 },
+        { path: 'src/index.ts', data: sourceData, mode: 0o644 },
+        {
+          path: '.packagemanifest.json',
+          data: Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, 'utf8'),
+          mode: 0o644,
+        },
+      ],
+      { compressionLevel: 9, deterministic: true },
+    );
+
+    const pkg = await loadPackage(archivePath);
+    assert.deepEqual(pkg.ignoredPayloadMetadataPaths, ['.packageshift']);
+    assert.deepEqual(
+      pkg.manifest.files.map((file) => file.path),
+      ['src/index.ts'],
+    );
+
+    const comparison = await comparePackageToProject(pkg, target);
+    assert.equal(
+      comparison.changes.some((change) => change.path === '.packageshift'),
+      false,
+    );
+
+    await applyPackage(pkg, {
+      cwd: target,
+      dryRun: false,
+      yes: true,
+      force: false,
+      backup: false,
+      conflictStrategy: 'abort',
+    });
+
+    assert.equal(
+      await readFile(path.join(target, 'src/index.ts'), 'utf8'),
+      'export const value = 2;\n',
+    );
+    await assert.rejects(
+      readFile(path.join(target, '.packageshift')),
+      /ENOENT/,
+    );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
 test('snapshot validates .packageshift before writing the archive', async () => {
   const workspace = await mkdtemp(
     path.join(tmpdir(), 'package-shift-invalid-'),

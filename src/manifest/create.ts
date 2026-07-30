@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { sha256Buffer, stableJson } from '../util/hash.js';
+import { isReservedPackageMetadataPath } from '../archive/metadata.js';
 import type {
   CollectedFile,
   ManifestFile,
@@ -18,6 +19,7 @@ export async function createManifest(
   const manifestFiles: ManifestFile[] = [];
   const data = new Map<string, Buffer>();
   for (const file of files) {
+    if (isReservedPackageMetadataPath(file.relativePath)) continue;
     const content = await readFile(file.absolutePath);
     data.set(file.relativePath, content);
     manifestFiles.push({

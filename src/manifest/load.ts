@@ -15,6 +15,8 @@ import {
   legacyPackageManifestPath,
   packageManifestPath,
   packageShiftPath,
+  isReservedPackageMetadataPath,
+  packagePayloadFiles,
   reservedPackageMetadataPaths,
 } from '../archive/metadata.js';
 
@@ -152,6 +154,47 @@ function generatedManifest(
   };
 }
 
+function sanitizeManifestPayload(manifest: PackageManifest): {
+  manifest: PackageManifest;
+  ignoredPaths: string[];
+} {
+  const files = packagePayloadFiles(manifest.files);
+  const baseFiles = manifest.baseFiles
+    ? packagePayloadFiles(manifest.baseFiles)
+    : undefined;
+  const ignoredPaths = [...manifest.files, ...(manifest.baseFiles ?? [])]
+    .filter((file) => isReservedPackageMetadataPath(file.path))
+    .map((file) => file.path)
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .sort();
+  const filesChanged = files.length !== manifest.files.length;
+  const baseFilesChanged =
+    manifest.baseFiles !== undefined &&
+    baseFiles !== undefined &&
+    baseFiles.length !== manifest.baseFiles.length;
+
+  if (!filesChanged && !baseFilesChanged) return { manifest, ignoredPaths };
+
+  return {
+    manifest: {
+      ...manifest,
+      files,
+      ...(filesChanged
+        ? { rootHash: sha256Buffer(Buffer.from(stableJson(files), 'utf8')) }
+        : {}),
+      ...(baseFilesChanged && baseFiles
+        ? {
+            baseFiles,
+            baseRootHash: sha256Buffer(
+              Buffer.from(stableJson(baseFiles), 'utf8'),
+            ),
+          }
+        : {}),
+    },
+    ignoredPaths,
+  };
+}
+
 function verifyPayload(
   manifest: PackageManifest,
   entries: Map<string, ReadArchiveEntry>,
@@ -201,5 +244,13 @@ export async function loadPackage(archivePath: string): Promise<LoadedPackage> {
   }
 
   verifyPayload(manifest, entries);
-  return { archivePath, manifest, manifestSource, shift, entries };
+  const sanitized = sanitizeManifestPayload(manifest);
+  return {
+    archivePath,
+    manifest: sanitized.manifest,
+    manifestSource,
+    shift,
+    entries,
+    ignoredPayloadMetadataPaths: sanitized.ignoredPaths,
+  };
 }

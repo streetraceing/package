@@ -112,6 +112,11 @@ function printPackageMetadata(pkg: LoadedPackage, context: ApplyContext): void {
   } else if (pkg.manifestSource === 'legacy') {
     console.log(`${label('Manifest')} legacy .packagemanifest`);
   }
+  if (pkg.ignoredPayloadMetadataPaths.length > 0) {
+    warning(
+      `reserved CLI metadata listed as payload was ignored: ${pkg.ignoredPayloadMetadataPaths.join(', ')}`,
+    );
+  }
 }
 
 function printConflictPolicy(options: ApplyOptions): void {

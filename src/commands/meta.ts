@@ -10,7 +10,7 @@ import {
   DeletedCacheSession,
   reportDeletedCache,
 } from '../util/deleted-cache.js';
-import { color, label, success } from '../util/terminal.js';
+import { color, label, success, warning } from '../util/terminal.js';
 
 export async function inspectCommand(
   archivePath: string,
@@ -30,6 +30,7 @@ export async function inspectCommand(
           manifest: pkg.manifest,
           manifestSource: pkg.manifestSource,
           structuralOperations: operations,
+          ignoredPayloadMetadataPaths: pkg.ignoredPayloadMetadataPaths,
         },
         null,
         2,
@@ -52,6 +53,10 @@ export async function inspectCommand(
   if (pkg.manifest.sourcePackage)
     console.log(
       `${label('Source package')} ${pkg.manifest.sourcePackage.name} (${pkg.manifest.sourcePackage.sha256})`,
+    );
+  if (pkg.ignoredPayloadMetadataPaths.length > 0)
+    warning(
+      `reserved CLI metadata listed as payload was ignored: ${pkg.ignoredPayloadMetadataPaths.join(', ')}`,
     );
 }
 
@@ -80,6 +85,10 @@ export async function checkCommand(
       `${pkg.shift.instructions.length} .packageshift ${instructionWord} parsed`,
     );
   }
+  if (pkg.ignoredPayloadMetadataPaths.length > 0)
+    warning(
+      `reserved CLI metadata listed as payload was ignored: ${pkg.ignoredPayloadMetadataPaths.join(', ')}`,
+    );
 }
 
 export async function listCommand(
