@@ -6,10 +6,11 @@ of a project.
 
 ## Guides
 
-| Guide                                       | Use it when you need to...                                                                                   |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| [Configuration schema](./schema.json)       | Configure file selection, ZIP output, metadata, and apply behavior in `.packagerc`.                          |
-| [`.packageshift` format](./PACKAGESHIFT.md) | Understand or author file removals, moves, copies, replacements, mode changes, and source snapshot metadata. |
+| Guide                                       | Use it when you need to...                                                                                     |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| [AI agent guide](./AGENTS.md)               | Give coding agents an exact, safe workflow for reading, modifying, validating, and returning package archives. |
+| [Configuration schema](./schema.json)       | Configure file selection, ZIP output, metadata, and apply behavior in `.packagerc`.                            |
+| [`.packageshift` format](./PACKAGESHIFT.md) | Understand or author removals, moves, copies, replacements, mode changes, and source snapshot metadata.        |
 
 ## Fastest path
 

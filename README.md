@@ -165,7 +165,8 @@ Before restoration, Package creates a recovery backup of the current state, maki
 the rollback itself reversible. Set `STREETRACEING_PACKAGE_HOME` to override the
 package data directory for automation or isolated environments.
 
-See the [configuration schema](docs/schema.json) and
+See the [AI agent guide](docs/AGENTS.md),
+[configuration schema](docs/schema.json), and
 [`.packageshift` format reference](docs/PACKAGESHIFT.md) for full details.
 
 ## Development
