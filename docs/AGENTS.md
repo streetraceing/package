@@ -418,6 +418,7 @@ Important options:
 --dry-run
 --yes
 --force
+--allow-project-mismatch
 --backup / --no-backup
 --conflict abort|overwrite|skip
 --delete-package / --keep-package
@@ -434,6 +435,32 @@ Important options:
 `--force` bypasses base and per-file hash guards. An AI agent should not use it
 unless the user explicitly accepts the risk or the agent has independently
 verified the target state.
+
+### Cross-project protection
+
+Before a real apply, the CLI evaluates whether the archive belongs to the target.
+A verified patch base is treated as authoritative. Otherwise it compares
+`package.json` names, embedded manifest project metadata, and whether archive
+payload paths overlap the existing project structure.
+
+When the archive appears to target another project, interactive apply prints both
+identities and requires the operator to type the target directory name before the
+normal apply confirmation. `--yes` does not suppress this extra guard. In a
+non-interactive environment, the command fails with `PROJECT_MISMATCH` unless
+`--allow-project-mismatch` is passed explicitly.
+
+AI agents should follow this sequence:
+
+```bash
+package apply update.zip --cwd /path/to/target --dry-run
+package inspect update.zip
+# Only after confirming the target intentionally differs:
+package apply update.zip --cwd /path/to/target --yes --allow-project-mismatch
+```
+
+Do not add `--allow-project-mismatch` automatically. Treat it as a user-approved
+safety override, separate from `--force`. A dry run only warns and remains
+non-destructive.
 
 ### Snapshot apply semantics
 

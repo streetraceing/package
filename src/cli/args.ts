@@ -11,6 +11,7 @@ export interface ParsedArgs {
   dryRun: boolean;
   yes: boolean;
   force: boolean;
+  allowProjectMismatch: boolean;
   backup?: boolean;
   deletePackageOnApply?: boolean;
   deleteSourcePackageOnApply?: boolean;
@@ -59,6 +60,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     dryRun: false,
     yes: false,
     force: false,
+    allowProjectMismatch: false,
     quiet: false,
     configOverrides: {},
   };
@@ -80,6 +82,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
     else if (arg === '--dry-run') parsed.dryRun = true;
     else if (arg === '--yes' || arg === '-y') parsed.yes = true;
     else if (arg === '--force' || arg === '-f') parsed.force = true;
+    else if (arg === '--allow-project-mismatch')
+      parsed.allowProjectMismatch = true;
     else if (arg === '--backup') parsed.backup = true;
     else if (arg === '--no-backup') parsed.backup = false;
     else if (arg === '--delete-package') parsed.deletePackageOnApply = true;

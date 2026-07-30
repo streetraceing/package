@@ -42,6 +42,11 @@ Apply an approved update non-interactively:
 npx @streetraceing/package apply update.zip --yes
 ```
 
+Package checks whether the archive appears to belong to the target project. A
+likely mismatch requires a second interactive confirmation; `--yes` alone does
+not bypass it. For an intentional automated cross-project apply, review with
+`--dry-run` and pass `--allow-project-mismatch` explicitly.
+
 Run `npx @streetraceing/package --help` for the complete command reference.
 
 ## Optional package lifecycle settings

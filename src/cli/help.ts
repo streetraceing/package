@@ -40,6 +40,7 @@ Apply options:
   --dry-run                   Validate and preview without writing
   -y, --yes                   Skip interactive confirmation
   -f, --force                 Ignore base/hash conflicts
+  --allow-project-mismatch    Explicitly allow applying to another project
   --[no-]backup               Keep or disable a versioned backup
   --delete-package            Delete the applied archive after success
   --keep-package              Keep the applied archive (default)

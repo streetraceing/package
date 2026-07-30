@@ -144,6 +144,7 @@ export interface ApplyOptions {
   dryRun: boolean;
   yes: boolean;
   force: boolean;
+  allowProjectMismatch?: boolean;
   backup: boolean;
   conflictStrategy: ConflictStrategy;
   beforeApply?: string[];

@@ -16,6 +16,10 @@ import {
   reportDeletedCache,
 } from '../util/deleted-cache.js';
 import { color, label, success, warning } from '../util/terminal.js';
+import {
+  confirmProjectMismatch,
+  detectProjectMismatch,
+} from '../apply/project-identity.js';
 
 interface ApplyContext {
   archivePath: string;
@@ -135,6 +139,11 @@ export async function applyCommand(
   };
   const pkg = await loadPackage(context.archivePath);
   const comparison = await comparePackageToProject(pkg, context.projectRoot);
+  const projectMismatch = await detectProjectMismatch(
+    pkg,
+    context.projectRoot,
+    comparison.baseMatches,
+  );
   const sourceCleanupPlan =
     !options.dryRun && options.deleteSourcePackageOnApply
       ? await prepareSourcePackageCleanup(pkg, context)
@@ -153,6 +162,8 @@ export async function applyCommand(
   console.log('');
   console.log(formatChanges(comparison.changes));
   console.log('');
+  await confirmProjectMismatch(projectMismatch, options);
+  if (projectMismatch && !options.dryRun) console.log('');
 
   const result = await applyPackage(
     pkg,

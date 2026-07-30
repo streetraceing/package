@@ -98,6 +98,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       dryRun: args.dryRun,
       yes: args.yes,
       force: args.force,
+      allowProjectMismatch: args.allowProjectMismatch,
       backup: args.backup ?? config.backupOnApply,
       conflictStrategy: args.conflictStrategy ?? config.conflictStrategy,
       beforeApply: config.beforeApply,

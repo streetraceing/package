@@ -30,6 +30,10 @@ import {
 } from '../src/apply/backups.js';
 import type { ManifestFile, PackageManifest } from '../src/types.js';
 import { projectDeletedCacheDirectory } from '../src/util/deleted-cache.js';
+import {
+  confirmProjectMismatch,
+  detectProjectMismatch,
+} from '../src/apply/project-identity.js';
 
 async function write(
   root: string,
@@ -1147,6 +1151,72 @@ test('caches files before apply deletion or replacement and warns for large file
     if (previousHome === undefined)
       delete process.env.STREETRACEING_PACKAGE_HOME;
     else process.env.STREETRACEING_PACKAGE_HOME = previousHome;
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test('requires explicit confirmation before applying to a different project', async () => {
+  const workspace = await mkdtemp(
+    path.join(tmpdir(), 'package-project-mismatch-'),
+  );
+  const source = path.join(workspace, 'source-project');
+  const target = path.join(workspace, 'target-project');
+  try {
+    await mkdir(source, { recursive: true });
+    await mkdir(target, { recursive: true });
+    await write(
+      source,
+      'package.json',
+      '{"name":"@example/source-app","version":"1.0.0"}\n',
+    );
+    await write(source, 'src/index.ts', 'export const source = true;\n');
+    await write(
+      target,
+      'package.json',
+      '{"name":"@example/other-app","version":"1.0.0"}\n',
+    );
+    await write(target, 'lib/index.ts', 'export const target = true;\n');
+
+    const archivePath = await createSnapshot(
+      {
+        ...defaultConfig,
+        root: source,
+        output: workspace,
+        strategy: 'walk',
+      },
+      { output: '../source-project.zip', quiet: true },
+    );
+    const pkg = await loadPackage(archivePath);
+    const mismatch = await detectProjectMismatch(pkg, target);
+
+    assert.ok(mismatch);
+    assert.match(mismatch.reasons.join('\n'), /package\.json names differ/);
+    await assert.rejects(
+      confirmProjectMismatch(mismatch, {
+        cwd: target,
+        dryRun: false,
+        yes: true,
+        force: false,
+        allowProjectMismatch: false,
+        backup: false,
+        conflictStrategy: 'abort',
+      }),
+      (error: unknown) =>
+        error instanceof Error &&
+        'code' in error &&
+        error.code === 'PROJECT_MISMATCH',
+    );
+    await confirmProjectMismatch(mismatch, {
+      cwd: target,
+      dryRun: false,
+      yes: true,
+      force: false,
+      allowProjectMismatch: true,
+      backup: false,
+      conflictStrategy: 'abort',
+    });
+    assert.equal(await detectProjectMismatch(pkg, target, true), undefined);
+  } finally {
     await rm(workspace, { recursive: true, force: true });
   }
 });

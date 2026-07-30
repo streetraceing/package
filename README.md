@@ -55,6 +55,14 @@ npx @streetraceing/package inspect update.zip --json
 npx @streetraceing/package backup list
 ```
 
+Before a real `apply`, Package compares the archive identity with the target
+project. It uses a verified patch base when available, then `package.json` names,
+manifest project metadata, and structural path overlap. A likely cross-project
+apply produces a prominent warning and an additional confirmation that requires
+typing the target directory name. `--yes` does not bypass this guard. Intentional
+non-interactive cross-project application requires the explicit
+`--allow-project-mismatch` flag; use `--dry-run` first.
+
 Both command orders work for archive operations:
 
 ```bash
