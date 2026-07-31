@@ -17,7 +17,8 @@ import { tmpdir } from 'node:os';
 import { defaultConfig } from '../src/config.js';
 import { createSnapshot } from '../src/commands/zip.js';
 import { createShiftArchive } from '../src/commands/shift.js';
-import { loadPackage } from '../src/manifest/load.js';
+import { metadataCommand } from '../src/commands/metadata.js';
+import { loadManifestFile, loadPackage } from '../src/manifest/load.js';
 import { comparePackageToProject } from '../src/commands/compare.js';
 import { applyPackage } from '../src/apply/transaction.js';
 import { applyCommand } from '../src/commands/apply.js';
@@ -30,6 +31,7 @@ import {
 } from '../src/apply/backups.js';
 import type { ManifestFile, PackageManifest } from '../src/types.js';
 import { projectDeletedCacheDirectory } from '../src/util/deleted-cache.js';
+import { parseShift } from '../src/shift/parser.js';
 import {
   confirmProjectMismatch,
   detectProjectMismatch,
@@ -129,6 +131,65 @@ test('creates a snapshot, generates a shift archive, and applies it', async () =
       after.changes.filter((change) => change.kind !== 'UNCHANGED').length,
       0,
     );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test('generates ready .packagemanifest.json and .packageshift files', async () => {
+  const workspace = await mkdtemp(
+    path.join(tmpdir(), 'package-ready-metadata-'),
+  );
+  const source = path.join(workspace, 'source-project');
+  try {
+    await mkdir(source, { recursive: true });
+    await write(source, '.gitignore', '*.zip\n');
+    await write(source, 'src/old.ts', 'export const value = 1;\n');
+    await write(source, 'src/remove.ts', 'remove me\n');
+
+    const config = {
+      ...defaultConfig,
+      root: source,
+      output: workspace,
+      strategy: 'walk' as const,
+      gitignore: true,
+      saveDeletedCache: false,
+    };
+    const baseArchive = await createSnapshot(config, {
+      output: '../base.zip',
+      quiet: true,
+    });
+
+    await rename(
+      path.join(source, 'src/old.ts'),
+      path.join(source, 'src/new.ts'),
+    );
+    await unlink(path.join(source, 'src/remove.ts'));
+    await write(source, 'src/added.ts', 'export const added = true;\n');
+
+    await metadataCommand('../base.zip', config, {
+      message: 'Prepared update',
+      quiet: true,
+    });
+
+    const manifest = await loadManifestFile(
+      path.join(source, '.packagemanifest.json'),
+    );
+    assert.equal(manifest.kind, 'snapshot');
+    assert.equal(manifest.sourcePackage?.name, path.basename(baseArchive));
+    assert.deepEqual(
+      manifest.files.map((file) => file.path),
+      ['.gitignore', 'src/added.ts', 'src/new.ts'],
+    );
+
+    const shift = parseShift(
+      await readFile(path.join(source, '.packageshift'), 'utf8'),
+      '.packageshift',
+    );
+    assert.equal(shift.instructions[0]?.type, 'MESSAGE');
+    assert.ok(shift.instructions.some((item) => item.type === 'BASE'));
+    assert.ok(shift.instructions.some((item) => item.type === 'MOVE'));
+    assert.ok(shift.instructions.some((item) => item.type === 'REMOVE'));
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }

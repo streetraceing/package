@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { PackageError } from '../errors.js';
 import type {
   LoadedPackage,
@@ -20,7 +21,10 @@ import {
   reservedPackageMetadataPaths,
 } from '../archive/metadata.js';
 
-function validateManifest(value: unknown, sourcePath: string): PackageManifest {
+export function validateManifest(
+  value: unknown,
+  sourcePath: string,
+): PackageManifest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new PackageError(
       `${sourcePath} must contain an object.`,
@@ -93,6 +97,22 @@ function validateManifest(value: unknown, sourcePath: string): PackageManifest {
       'MANIFEST_INTEGRITY',
     );
   return manifest as PackageManifest;
+}
+
+export async function loadManifestFile(
+  manifestPath: string,
+): Promise<PackageManifest> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(manifestPath, 'utf8'));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw error;
+    throw new PackageError(
+      `Cannot parse ${manifestPath}: ${(error as Error).message}`,
+      'MANIFEST_INVALID',
+    );
+  }
+  return validateManifest(parsed, manifestPath);
 }
 
 function parseManifestEntry(

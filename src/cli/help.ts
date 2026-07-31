@@ -4,6 +4,7 @@ Package, compare, and safely apply project source archives.
 Usage:
   package zip [directory] [options]
   package shift <base.zip> [options]
+  package metadata [base.zip|manifest.json] [options]
   package diff <archive.zip> [options]
   package apply <archive.zip> [options]
   package backup [list]
@@ -64,13 +65,19 @@ Deleted/replaced files are cached by default in:
 
 Files larger than 10 MiB are cached with a warning. Set NO_COLOR to disable ANSI colors.
 
-Shift options:
+Metadata and shift options:
   --message <text>            Add a MESSAGE instruction
+
+Metadata generation:
+  package metadata base.zip   Recalculate .packagemanifest.json and .packageshift
+  package metadata            Use the existing .packagemanifest.json as the baseline
+  package meta                Short alias for package metadata
 
 Examples:
   package zip
   package zip ./my-project --output release.zip
   package shift base.zip --output update.zip
+  package metadata base.zip --message "Prepared update"
   package diff update.zip
   package apply update.zip --dry-run
   package apply update.zip --yes

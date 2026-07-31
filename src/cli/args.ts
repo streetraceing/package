@@ -34,6 +34,8 @@ const commands = new Set([
   'help',
   'version',
   'backup',
+  'metadata',
+  'meta',
 ]);
 
 function takeValue(

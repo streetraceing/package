@@ -50,6 +50,7 @@ Common options:
 npx @streetraceing/package zip --output release.zip
 npx @streetraceing/package zip --cwd /path/to/project --strategy=walk
 npx @streetraceing/package shift base.zip --message "Describe the update"
+npx @streetraceing/package metadata base.zip --message "Prepare metadata files"
 npx @streetraceing/package apply update.zip --conflict=skip
 npx @streetraceing/package inspect update.zip --json
 npx @streetraceing/package backup list
@@ -75,9 +76,26 @@ Run `npx @streetraceing/package --help` to see every command and option.
 ## Configuration and package format
 
 Run `package init` to generate a strict-JSON `.packagerc` file with schema
-support. By default, Package uses Git file selection when it is available;
+support. The command also creates or updates `.gitignore` with a generated
+`*.zip` rule, without duplicating the block on later forced initialization. By default, Package uses Git file selection when it is available;
 otherwise it uses its built-in ignore-aware walker. Git metadata, dependencies,
 previous package metadata, and backup directories are always excluded.
+
+Generate ready metadata files without creating an archive:
+
+```bash
+package metadata base.zip --message "Describe the update"
+package metadata --message "Use the existing manifest as the baseline"
+package meta
+```
+
+`package metadata` writes `.packagemanifest.json` and `.packageshift` into the
+project root. With a base ZIP it records the source snapshot name and SHA-256.
+Without an argument it uses the existing `.packagemanifest.json` as the
+baseline; when no baseline exists, it creates a current snapshot manifest and an
+empty structural `.packageshift`. This command is intended for manual archive
+assembly and AI-agent handoffs. `package zip` still recalculates its embedded
+manifest when it creates a ZIP.
 
 Snapshot archives contain all selected files and a generated
 `.packagemanifest.json`. Update archives contain changed payload files,

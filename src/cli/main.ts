@@ -15,6 +15,7 @@ import {
 } from '../commands/meta.js';
 import { PackageError } from '../errors.js';
 import { backupCommand } from '../commands/backups.js';
+import { metadataCommand } from '../commands/metadata.js';
 import { colorizeHelp } from '../util/terminal.js';
 
 async function readVersion(): Promise<string> {
@@ -108,6 +109,11 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       deleteSourcePackageOnApply:
         args.deleteSourcePackageOnApply ?? config.deleteSourcePackageOnApply,
       saveDeletedCache: args.saveDeletedCache ?? config.saveDeletedCache,
+    });
+  } else if (args.command === 'metadata' || args.command === 'meta') {
+    await metadataCommand(args.positionals[0], config, {
+      message: args.message,
+      quiet: args.quiet,
     });
   } else if (args.command === 'backup') {
     await backupCommand(

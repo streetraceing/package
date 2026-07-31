@@ -67,6 +67,22 @@ never extracted into the project as payload. Older archives that incorrectly
 list reserved metadata in their manifest are accepted with a warning and those
 entries are ignored during `diff` and `apply`.
 
+## Generate the file automatically
+
+Use `package metadata` to calculate structural instructions and write both
+`.packageshift` and `.packagemanifest.json` into the project root:
+
+```bash
+package metadata base.zip --message "Describe the update"
+package metadata --message "Use the existing manifest as baseline"
+```
+
+The first form compares the current project with a snapshot ZIP. The second form
+loads the existing project-root `.packagemanifest.json` before replacing it. The
+short alias is `package meta`. Added and modified file contents are represented by
+the generated manifest and eventual archive payload; `.packageshift` records the
+structural operations that payload alone cannot express.
+
 ## Validation
 
 Validate an archive and parse its shift file without changing the project:

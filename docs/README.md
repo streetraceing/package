@@ -115,6 +115,28 @@ A restore creates a recovery backup first, then restores the selected version an
 every newer delta. The recovery version can be selected later to undo the rollback.
 `STREETRACEING_PACKAGE_HOME` can override the data directory.
 
+## Generate metadata files
+
+Use `metadata` when project files are already prepared and you need ready
+metadata files in the project root without creating a ZIP:
+
+```bash
+package metadata base.zip --message "Describe the update"
+package metadata --message "Use the current .packagemanifest.json as baseline"
+package meta
+```
+
+The command recalculates the complete snapshot `.packagemanifest.json` and
+creates `.packageshift` structural instructions. Baseline selection is:
+
+1. the explicitly supplied snapshot ZIP or manifest;
+2. the existing project-root `.packagemanifest.json`;
+3. no baseline, producing an empty structural `.packageshift`.
+
+When a ZIP baseline is supplied, its filename and SHA-256 are recorded so source
+package cleanup can identify it safely. The command preserves application files
+and replaces only the two reserved metadata files.
+
 ## Principles
 
 - **Safe by default:** Package validates archive paths and integrity, expected

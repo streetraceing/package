@@ -25,7 +25,9 @@ export type DeletedCacheReason =
   | 'replace-output-archive'
   | 'delete-applied-package'
   | 'delete-source-package'
-  | 'replace-config';
+  | 'replace-config'
+  | 'replace-gitignore'
+  | 'replace-metadata';
 
 export interface DeletedCacheEntry {
   originalPath: string;
@@ -43,7 +45,7 @@ export interface DeletedCacheMetadata {
   id: string;
   project: string;
   projectRoot: string;
-  command: 'zip' | 'shift' | 'apply' | 'backup-restore' | 'init';
+  command: 'zip' | 'shift' | 'apply' | 'backup-restore' | 'init' | 'metadata';
   createdAt: string;
   sourceArchive?: string;
   entries: DeletedCacheEntry[];

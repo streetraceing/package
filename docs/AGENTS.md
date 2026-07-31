@@ -30,6 +30,7 @@ Typical commands:
 ```bash
 package zip
 package shift base.zip --output update.zip
+package metadata base.zip --message "Prepare handoff metadata"
 package check update.zip
 package diff update.zip
 package apply update.zip --dry-run
@@ -106,7 +107,23 @@ npm run build
 
 The exact commands come from the project, not from this guide.
 
-### Step 5: create or update `.packageshift`
+### Step 5: generate the metadata files
+
+Prefer the CLI instead of manually calculating hashes and structural changes:
+
+```bash
+# Use the original snapshot archive as the baseline.
+package metadata /path/to/input.zip --message "Describe the delivered changes"
+
+# Or, after extracting an archive that left its old manifest in the project root:
+package metadata --message "Describe the delivered changes"
+```
+
+The command reads the baseline before replacing metadata, scans the current
+project with `.packagerc` rules, and writes both `.packagemanifest.json` and
+`.packageshift`. The short alias is `package meta`. If no baseline is supplied
+and no existing manifest is present, it writes a current snapshot manifest and
+an empty structural `.packageshift`.
 
 The output archive for an AI-delivered change set should contain a valid
 `.packageshift`, even when the only operations are payload additions or
@@ -137,10 +154,11 @@ CHMOD "scripts/deploy.sh" 755
 
 Use forward slashes in archive paths on every operating system.
 
-### Step 6: regenerate `.packagemanifest.json`
+### Step 6: verify the regenerated `.packagemanifest.json`
 
 Never return a stale manifest copied from the input archive after source files
-have changed.
+have changed. `package metadata` performs this regeneration automatically; an
+agent should still inspect the result before packaging.
 
 The manifest must describe the output archive's actual payload, including:
 
@@ -310,6 +328,9 @@ Example:
   "saveDeletedCache": true
 }
 ```
+
+`package init` also creates or updates `.gitignore` with a generated `*.zip`
+rule so locally created package archives are not committed accidentally.
 
 Unless the user specifically requests a configuration change, preserve the
 existing `.packagerc` exactly. AI agents should not silently enable cleanup,
