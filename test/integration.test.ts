@@ -10,7 +10,9 @@ import {
   readdir,
   rename,
   rm,
+  stat,
   unlink,
+  utimes,
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -130,6 +132,73 @@ test('creates a snapshot, generates a shift archive, and applies it', async () =
     assert.equal(
       after.changes.filter((change) => change.kind !== 'UNCHANGED').length,
       0,
+    );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test('apply writes only changed payload files unless --rewrite-all is enabled', async () => {
+  const workspace = await mkdtemp(
+    path.join(tmpdir(), 'package-selective-apply-'),
+  );
+  const source = path.join(workspace, 'source-project');
+  const target = path.join(workspace, 'target-project');
+  try {
+    await mkdir(source, { recursive: true });
+    await write(source, 'unchanged.txt', 'same\n');
+    await write(source, 'changed.txt', 'before\n');
+    await cp(source, target, { recursive: true });
+    await write(source, 'changed.txt', 'after\n');
+
+    const archivePath = await createSnapshot(
+      {
+        ...defaultConfig,
+        root: source,
+        output: workspace,
+        strategy: 'walk',
+        gitignore: false,
+        saveDeletedCache: false,
+      },
+      { output: '../snapshot.zip', quiet: true },
+    );
+    const pkg = await loadPackage(archivePath);
+    const oldDate = new Date('2000-01-01T00:00:00.000Z');
+    await utimes(path.join(target, 'unchanged.txt'), oldDate, oldDate);
+
+    const selective = await applyPackage(pkg, {
+      cwd: target,
+      dryRun: false,
+      yes: true,
+      force: false,
+      backup: false,
+      conflictStrategy: 'abort',
+    });
+    assert.equal(selective.changedPaths, 1);
+    assert.equal(selective.writtenFiles, 1);
+    assert.equal(
+      await readFile(path.join(target, 'changed.txt'), 'utf8'),
+      'after\n',
+    );
+    assert.equal(
+      (await stat(path.join(target, 'unchanged.txt'))).mtime.getTime(),
+      oldDate.getTime(),
+    );
+
+    const rewrite = await applyPackage(pkg, {
+      cwd: target,
+      dryRun: false,
+      yes: true,
+      force: false,
+      backup: false,
+      conflictStrategy: 'abort',
+      rewriteAll: true,
+    });
+    assert.equal(rewrite.changedPaths, 2);
+    assert.equal(rewrite.writtenFiles, 2);
+    assert.ok(
+      (await stat(path.join(target, 'unchanged.txt'))).mtime.getTime() >
+        oldDate.getTime(),
     );
   } finally {
     await rm(workspace, { recursive: true, force: true });

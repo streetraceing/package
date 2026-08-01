@@ -12,6 +12,7 @@ export interface ParsedArgs {
   yes: boolean;
   force: boolean;
   allowProjectMismatch: boolean;
+  rewriteAll: boolean;
   backup?: boolean;
   deletePackageOnApply?: boolean;
   deleteSourcePackageOnApply?: boolean;
@@ -63,6 +64,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     yes: false,
     force: false,
     allowProjectMismatch: false,
+    rewriteAll: false,
     quiet: false,
     configOverrides: {},
   };
@@ -86,6 +88,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     else if (arg === '--force' || arg === '-f') parsed.force = true;
     else if (arg === '--allow-project-mismatch')
       parsed.allowProjectMismatch = true;
+    else if (arg === '--rewrite-all') parsed.rewriteAll = true;
     else if (arg === '--backup') parsed.backup = true;
     else if (arg === '--no-backup') parsed.backup = false;
     else if (arg === '--delete-package') parsed.deletePackageOnApply = true;

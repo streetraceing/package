@@ -42,6 +42,7 @@ Apply options:
   -y, --yes                   Skip interactive confirmation
   -f, --force                 Ignore base/hash conflicts
   --allow-project-mismatch    Explicitly allow applying to another project
+  --rewrite-all               Rewrite every payload file, including unchanged files
   --[no-]backup               Keep or disable a versioned backup
   --delete-package            Delete the applied archive after success
   --keep-package              Keep the applied archive (default)
@@ -63,7 +64,8 @@ Backups are stored outside projects in:
 Deleted/replaced files are cached by default in:
   ~/streetraceing/.package/cache/<project-id>/<operation-id>
 
-Files larger than 10 MiB are cached with a warning. Set NO_COLOR to disable ANSI colors.
+Files larger than 10 MiB are cached with a warning. Help uses white/gray tones.
+Set NO_COLOR to disable ANSI colors.
 
 Metadata and shift options:
   --message <text>            Add a MESSAGE instruction
@@ -81,6 +83,7 @@ Examples:
   package diff update.zip
   package apply update.zip --dry-run
   package apply update.zip --yes
+  package apply snapshot.zip --rewrite-all
   package backup list
   package backup restore latest
 `;

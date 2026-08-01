@@ -15,6 +15,7 @@ import type {
   ApplyOptions,
   ConflictStrategy,
   LoadedPackage,
+  ManifestFile,
   ShiftInstruction,
 } from '../types.js';
 import { PackageError } from '../errors.js';
@@ -28,6 +29,8 @@ import { runPackageHooks } from '../util/hooks.js';
 import type { DeletedCacheSession } from '../util/deleted-cache.js';
 import { captureBackup, persistBackup, restoreBackupItems } from './backups.js';
 import { packagePayloadFiles } from '../archive/metadata.js';
+
+type PayloadAction = 'write' | 'chmod';
 
 async function existingFile(
   root: string,
@@ -53,22 +56,43 @@ async function existingFile(
   }
 }
 
+async function pathExists(
+  root: string,
+  relativePath: string,
+): Promise<boolean> {
+  try {
+    await lstat(resolveInside(root, relativePath));
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+function instructionPaths(instruction: ShiftInstruction): string[] {
+  if (
+    instruction.type === 'REMOVE' ||
+    instruction.type === 'REPLACE' ||
+    instruction.type === 'CHMOD'
+  )
+    return [instruction.path];
+  if (instruction.type === 'MOVE' || instruction.type === 'COPY')
+    return [instruction.from, instruction.to];
+  return [];
+}
+
+function instructionChangePaths(instruction: ShiftInstruction): string[] {
+  if (instruction.type === 'COPY') return [instruction.to];
+  return instructionPaths(instruction);
+}
+
 function affectedPaths(pkg: LoadedPackage): string[] {
   const paths = new Set(
     packagePayloadFiles(pkg.manifest.files).map((file) => file.path),
   );
-  for (const instruction of pkg.shift?.instructions ?? []) {
-    if (
-      instruction.type === 'REMOVE' ||
-      instruction.type === 'REPLACE' ||
-      instruction.type === 'CHMOD'
-    )
-      paths.add(instruction.path);
-    else if (instruction.type === 'MOVE' || instruction.type === 'COPY') {
-      paths.add(instruction.from);
-      paths.add(instruction.to);
-    }
-  }
+  for (const instruction of pkg.shift?.instructions ?? [])
+    for (const instructionPath of instructionPaths(instruction))
+      paths.add(instructionPath);
   return [...paths].sort();
 }
 
@@ -207,6 +231,37 @@ async function makeParent(root: string, relativePath: string): Promise<string> {
   return absolutePath;
 }
 
+async function instructionNeedsExecution(
+  root: string,
+  instruction: ShiftInstruction,
+): Promise<boolean> {
+  if (
+    instruction.type === 'MESSAGE' ||
+    instruction.type === 'BASE' ||
+    instruction.type === 'REPLACE'
+  )
+    return false;
+  if (instruction.type === 'REMOVE') return pathExists(root, instruction.path);
+  if (instruction.type === 'MOVE') {
+    if (await pathExists(root, instruction.from)) return true;
+    return !(await pathExists(root, instruction.to));
+  }
+  if (instruction.type === 'COPY') {
+    const source = await existingFile(root, instruction.from);
+    if (!source) return true;
+    const destination = await existingFile(root, instruction.to);
+    return (
+      !destination ||
+      sha256Buffer(destination.data) !== sha256Buffer(source.data)
+    );
+  }
+  if (instruction.type === 'CHMOD') {
+    const current = await existingFile(root, instruction.path);
+    return !current || current.mode !== instruction.mode;
+  }
+  return false;
+}
+
 async function executeInstruction(
   root: string,
   instruction: ShiftInstruction,
@@ -292,12 +347,16 @@ async function executeInstruction(
 export interface ApplyResult {
   backupPath?: string;
   changedPaths: number;
+  writtenFiles: number;
+  modeOnlyFiles: number;
   skippedPaths: string[];
   overwrittenConflicts: string[];
 }
 
 interface ApplyPlan {
   activePaths: string[];
+  activeInstructions: ShiftInstruction[];
+  payloadActions: Map<string, PayloadAction>;
   conflictStrategy: ConflictStrategy;
   skippedInstructions: Set<ShiftInstruction>;
   skippedPaths: Set<string>;
@@ -336,6 +395,18 @@ async function collectExpectedConflicts(
   return conflicts;
 }
 
+async function payloadAction(
+  root: string,
+  file: ManifestFile,
+  rewriteAll: boolean,
+): Promise<PayloadAction | undefined> {
+  if (rewriteAll) return 'write';
+  const current = await existingFile(root, file.path);
+  if (!current || sha256Buffer(current.data) !== file.sha256) return 'write';
+  if (current.mode !== (file.mode & 0o777)) return 'chmod';
+  return undefined;
+}
+
 async function createApplyPlan(
   pkg: LoadedPackage,
   options: ApplyOptions,
@@ -367,8 +438,33 @@ async function createApplyPlan(
     throw new PackageError(conflictMessage(conflict), 'APPLY_CONFLICT');
   }
 
+  const activeInstructions: ShiftInstruction[] = [];
+  for (const instruction of pkg.shift?.instructions ?? []) {
+    if (skippedInstructions.has(instruction)) continue;
+    if (await instructionNeedsExecution(options.cwd, instruction))
+      activeInstructions.push(instruction);
+  }
+
+  const payloadActions = new Map<string, PayloadAction>();
+  for (const file of packagePayloadFiles(pkg.manifest.files)) {
+    if (skippedPaths.has(file.path)) continue;
+    const action = await payloadAction(
+      options.cwd,
+      file,
+      options.rewriteAll === true,
+    );
+    if (action) payloadActions.set(file.path, action);
+  }
+
+  const activePaths = new Set<string>(payloadActions.keys());
+  for (const instruction of activeInstructions)
+    for (const instructionPath of instructionChangePaths(instruction))
+      activePaths.add(instructionPath);
+
   return {
-    activePaths: paths.filter((item) => !skippedPaths.has(item)),
+    activePaths: [...activePaths].sort(),
+    activeInstructions,
+    payloadActions,
     conflictStrategy,
     skippedInstructions,
     skippedPaths,
@@ -376,15 +472,13 @@ async function createApplyPlan(
   };
 }
 
-function destructivePaths(pkg: LoadedPackage, plan: ApplyPlan): string[] {
+function destructivePaths(plan: ApplyPlan): string[] {
   const paths = new Set<string>();
-  for (const file of packagePayloadFiles(pkg.manifest.files)) {
-    if (!plan.skippedPaths.has(file.path)) paths.add(file.path);
+  for (const [filePath, action] of plan.payloadActions) {
+    if (action === 'write') paths.add(filePath);
   }
-  for (const instruction of pkg.shift?.instructions ?? []) {
-    if (plan.skippedInstructions.has(instruction)) continue;
-    if (instruction.type === 'REMOVE' || instruction.type === 'REPLACE')
-      paths.add(instruction.path);
+  for (const instruction of plan.activeInstructions) {
+    if (instruction.type === 'REMOVE') paths.add(instruction.path);
     else if (instruction.type === 'MOVE') {
       paths.add(instruction.from);
       paths.add(instruction.to);
@@ -395,12 +489,11 @@ function destructivePaths(pkg: LoadedPackage, plan: ApplyPlan): string[] {
 
 async function cacheDestructivePaths(
   root: string,
-  pkg: LoadedPackage,
   plan: ApplyPlan,
   deletedCache?: DeletedCacheSession,
 ): Promise<void> {
   if (!deletedCache) return;
-  for (const relativePath of destructivePaths(pkg, plan)) {
+  for (const relativePath of destructivePaths(plan)) {
     await deletedCache.cachePath(
       resolveInside(root, relativePath),
       'apply-change',
@@ -419,21 +512,22 @@ async function executePackageChanges(
     conflictStrategy: plan.conflictStrategy,
   };
 
-  for (const instruction of pkg.shift?.instructions ?? []) {
-    if (plan.skippedInstructions.has(instruction)) continue;
+  for (const instruction of plan.activeInstructions)
     await executeInstruction(options.cwd, instruction, executionOptions);
-  }
 
   for (const file of packagePayloadFiles(pkg.manifest.files)) {
-    if (plan.skippedPaths.has(file.path)) continue;
-    const entry = pkg.entries.get(file.path);
-    if (!entry)
-      throw new PackageError(
-        `Archive payload is missing: ${file.path}`,
-        'ARCHIVE_INCOMPLETE',
-      );
+    const action = plan.payloadActions.get(file.path);
+    if (!action) continue;
     const destination = await makeParent(options.cwd, file.path);
-    await writeFile(destination, entry.data);
+    if (action === 'write') {
+      const entry = pkg.entries.get(file.path);
+      if (!entry)
+        throw new PackageError(
+          `Archive payload is missing: ${file.path}`,
+          'ARCHIVE_INCOMPLETE',
+        );
+      await writeFile(destination, entry.data);
+    }
     await chmod(destination, file.mode & 0o777);
   }
 }
@@ -460,20 +554,27 @@ async function rollbackFailedApply(
   );
 }
 
+function resultForPlan(plan: ApplyPlan, backupPath?: string): ApplyResult {
+  const actions = [...plan.payloadActions.values()];
+  return {
+    backupPath,
+    changedPaths: plan.activePaths.length,
+    writtenFiles: actions.filter((action) => action === 'write').length,
+    modeOnlyFiles: actions.filter((action) => action === 'chmod').length,
+    skippedPaths: [...plan.skippedPaths].sort(),
+    overwrittenConflicts: plan.overwrittenConflicts,
+  };
+}
+
 export async function applyPackage(
   pkg: LoadedPackage,
   options: ApplyOptions,
   deletedCache?: DeletedCacheSession,
 ): Promise<ApplyResult> {
   const plan = await createApplyPlan(pkg, options);
-  const skippedPaths = [...plan.skippedPaths].sort();
 
-  if (options.dryRun)
-    return {
-      changedPaths: plan.activePaths.length,
-      skippedPaths,
-      overwrittenConflicts: plan.overwrittenConflicts,
-    };
+  if (options.dryRun || plan.activePaths.length === 0)
+    return resultForPlan(plan);
 
   if (!(await shouldProceed(options, plan.activePaths.length)))
     throw new PackageError('Apply cancelled.', 'APPLY_CANCELLED');
@@ -484,7 +585,7 @@ export async function applyPackage(
     command: 'apply',
   });
 
-  await cacheDestructivePaths(options.cwd, pkg, plan, deletedCache);
+  await cacheDestructivePaths(options.cwd, plan, deletedCache);
   const backup = await captureBackup(options.cwd, plan.activePaths);
   const backupPath = options.backup
     ? await persistBackup(options.cwd, backup, {
@@ -499,10 +600,5 @@ export async function applyPackage(
     return rollbackFailedApply(options.cwd, backup, backupPath, error);
   }
 
-  return {
-    backupPath,
-    changedPaths: plan.activePaths.length,
-    skippedPaths,
-    overwrittenConflicts: plan.overwrittenConflicts,
-  };
+  return resultForPlan(plan, backupPath);
 }

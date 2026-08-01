@@ -6,12 +6,12 @@ const ansi = {
   reset: '\u001b[0m',
   bold: '\u001b[1m',
   dim: '\u001b[2m',
-  red: '\u001b[31m',
-  green: '\u001b[32m',
-  yellow: '\u001b[33m',
-  blue: '\u001b[34m',
-  magenta: '\u001b[35m',
-  cyan: '\u001b[36m',
+  white: '\u001b[38;5;255m',
+  light: '\u001b[38;5;252m',
+  gray: '\u001b[38;5;248m',
+  muted: '\u001b[38;5;243m',
+  warning: '\u001b[38;5;179m',
+  error: '\u001b[38;5;203m',
 } as const;
 
 function colorsEnabled(stream: OutputStream): boolean {
@@ -21,36 +21,40 @@ function colorsEnabled(stream: OutputStream): boolean {
 
 function decorate(
   value: string,
-  code: keyof typeof ansi,
+  code: string,
   stream: OutputStream = 'stdout',
 ): string {
   if (!colorsEnabled(stream)) return value;
-  return `${ansi[code]}${value}${ansi.reset}`;
+  return `${code}${value}${ansi.reset}`;
 }
 
 export const color = {
-  bold: (value: string) => decorate(value, 'bold'),
-  dim: (value: string) => decorate(value, 'dim'),
-  red: (value: string) => decorate(value, 'red'),
-  green: (value: string) => decorate(value, 'green'),
-  yellow: (value: string) => decorate(value, 'yellow'),
-  blue: (value: string) => decorate(value, 'blue'),
-  magenta: (value: string) => decorate(value, 'magenta'),
-  cyan: (value: string) => decorate(value, 'cyan'),
-  error: (value: string) => decorate(value, 'red', 'stderr'),
-  warning: (value: string) => decorate(value, 'yellow', 'stderr'),
+  bold: (value: string) => decorate(value, ansi.bold),
+  dim: (value: string) => decorate(value, ansi.dim),
+  white: (value: string) => decorate(value, ansi.white),
+  light: (value: string) => decorate(value, ansi.light),
+  gray: (value: string) => decorate(value, ansi.gray),
+  muted: (value: string) => decorate(value, ansi.muted),
+  red: (value: string) => decorate(value, ansi.error),
+  green: (value: string) => decorate(value, ansi.white),
+  yellow: (value: string) => decorate(value, ansi.warning),
+  blue: (value: string) => decorate(value, ansi.light),
+  magenta: (value: string) => decorate(value, ansi.gray),
+  cyan: (value: string) => decorate(value, ansi.light),
+  error: (value: string) => decorate(value, ansi.error, 'stderr'),
+  warning: (value: string) => decorate(value, ansi.warning, 'stderr'),
 };
 
 export function label(name: string): string {
-  return `${color.cyan(name)}:`;
+  return `${color.gray(name)}:`;
 }
 
 export function success(message: string): void {
-  console.log(`${color.green('✓')} ${message}`);
+  console.log(`${color.white('✓')} ${color.light(message)}`);
 }
 
 export function info(message: string): void {
-  console.log(`${color.cyan('›')} ${message}`);
+  console.log(`${color.gray('›')} ${color.light(message)}`);
 }
 
 export function warning(message: string): void {
@@ -74,27 +78,44 @@ export function formatBytes(bytes: number): string {
 }
 
 export function colorChangeKind(kind: string, value = kind): string {
-  if (kind === 'ADD') return color.green(value);
-  if (kind === 'MODIFY') return color.yellow(value);
-  if (kind === 'REMOVE' || kind === 'CONFLICT') return color.red(value);
-  if (kind === 'MOVE' || kind === 'COPY') return color.blue(value);
-  if (kind === 'MODE') return color.magenta(value);
-  return value;
+  if (kind === 'CONFLICT') return color.yellow(color.bold(value));
+  if (kind === 'ADD') return color.white(color.bold(value));
+  if (kind === 'MODIFY') return color.white(value);
+  if (kind === 'REMOVE') return color.gray(value);
+  if (kind === 'MOVE' || kind === 'COPY') return color.light(value);
+  if (kind === 'MODE') return color.muted(value);
+  return color.light(value);
+}
+
+function helpOption(line: string): string | undefined {
+  const option = line.match(
+    /^(\s{2})(-[^ ]+(?:,\s+--?[^ ]+)?|--?[^ ]+)(\s+)(.*)$/,
+  );
+  if (!option) return undefined;
+  return (
+    `${option[1]}${color.light(option[2] ?? '')}${option[3]}` +
+    color.muted(option[4] ?? '')
+  );
 }
 
 export function colorizeHelp(text: string): string {
   return text
     .split('\n')
-    .map((line) => {
-      if (/^[A-Z][A-Za-z ]+:$/.test(line)) return color.bold(color.cyan(line));
+    .map((line, index) => {
+      if (line.length === 0) return line;
+      if (index === 0) return color.white(color.bold(line));
+      if (index === 1) return color.gray(line);
+      if (/^[A-Z][A-Za-z ]+:$/.test(line)) return color.white(color.bold(line));
+      const formattedOption = helpOption(line);
+      if (formattedOption) return formattedOption;
       if (line.startsWith('  package ') || line.startsWith('  npx '))
-        return color.green(line);
-      const option = line.match(
-        /^(\s{2})(-[^ ]+(?:,\s+--?[^ ]+)?|--?[^ ]+)(.*)$/,
-      );
-      if (option)
-        return `${option[1]}${color.cyan(option[2] ?? '')}${option[3] ?? ''}`;
-      return line;
+        return color.light(line);
+      if (
+        line.startsWith('Backups are ') ||
+        line.startsWith('Deleted/replaced ')
+      )
+        return color.gray(line);
+      return color.muted(line);
     })
     .join('\n');
 }

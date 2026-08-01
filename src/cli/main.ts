@@ -100,6 +100,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       yes: args.yes,
       force: args.force,
       allowProjectMismatch: args.allowProjectMismatch,
+      rewriteAll: args.rewriteAll,
       backup: args.backup ?? config.backupOnApply,
       conflictStrategy: args.conflictStrategy ?? config.conflictStrategy,
       beforeApply: config.beforeApply,

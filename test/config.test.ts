@@ -5,6 +5,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { configSchemaUrl, defaultConfig, loadConfig } from '../src/config.js';
 import { initCommand } from '../src/commands/meta.js';
+import { parseArgs } from '../src/cli/args.js';
 
 interface JsonSchemaProperty {
   default?: unknown;
@@ -108,6 +109,13 @@ test('published JSON Schema matches configuration defaults', async () => {
       `schema markdownDescription for ${key}`,
     );
   }
+});
+
+test('parses the explicit full rewrite apply flag', () => {
+  const args = parseArgs(['apply', 'snapshot.zip', '--rewrite-all']);
+  assert.equal(args.command, 'apply');
+  assert.deepEqual(args.positionals, ['snapshot.zip']);
+  assert.equal(args.rewriteAll, true);
 });
 
 test('configuration rejects options not declared by the schema', async () => {

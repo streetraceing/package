@@ -440,6 +440,7 @@ Important options:
 --yes
 --force
 --allow-project-mismatch
+--rewrite-all
 --backup / --no-backup
 --conflict abort|overwrite|skip
 --delete-package / --keep-package
@@ -486,9 +487,22 @@ non-destructive.
 ### Snapshot apply semantics
 
 Applying a snapshot is an overlay. Files present in the archive are added or
-replaced. Files absent from the archive are not automatically deleted.
+updated. Files absent from the archive are not automatically deleted.
 
-Deletion requires an explicit `.packageshift` `REMOVE` instruction.
+The default write policy is selective: Package hashes current payload files and
+writes only additions, content changes, and mode changes. Unchanged files are not
+opened for writing, keep their timestamps, and are excluded from apply backups
+and deleted-file cache sessions.
+
+Use `--rewrite-all` only when a full payload rewrite is intentional:
+
+```bash
+package apply snapshot.zip --rewrite-all
+```
+
+This flag rewrites every payload file even when its content and mode already
+match. It does not delete extra target files; deletion still requires an explicit
+`.packageshift` `REMOVE` instruction.
 
 ### Transaction and rollback behavior
 
@@ -843,8 +857,11 @@ For CI or agent automation:
   application;
 - inspect terminal warnings even when the command exit status is successful.
 
-Color is automatically disabled when output is redirected or JSON is requested.
-Set `NO_COLOR=1` to disable ANSI output explicitly.
+Interactive output uses a restrained monochrome palette. Normal command output
+uses soft white and gray tones, while warnings and errors keep distinct safety
+colors. Help output (`package -h`) uses only white and gray shades. Color is
+automatically disabled when output is redirected or JSON is requested. Set
+`NO_COLOR=1` to disable ANSI output explicitly.
 
 ## 19. Current limitations
 
@@ -855,6 +872,8 @@ AI agents should account for these implementation limits:
 - Expanded archives are limited to 4 GiB.
 - Generated rename detection recognizes identical content.
 - Snapshot application is an overlay, not directory synchronization.
+- `--rewrite-all` rewrites payload files but still does not remove extra target
+  files.
 - A manifestless update cannot fully verify the base project.
 - Git is more authoritative than the fallback walker for complex ignore rules.
 - Hook-created deletions cannot be captured by the deleted-file cache.

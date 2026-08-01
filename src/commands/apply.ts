@@ -16,6 +16,7 @@ import {
   reportDeletedCache,
 } from '../util/deleted-cache.js';
 import { color, label, success, warning } from '../util/terminal.js';
+import { packagePayloadFiles } from '../archive/metadata.js';
 import {
   confirmProjectMismatch,
   detectProjectMismatch,
@@ -123,10 +124,46 @@ function printPackageMetadata(pkg: LoadedPackage, context: ApplyContext): void {
   }
 }
 
-function printConflictPolicy(options: ApplyOptions): void {
+function printApplyPolicies(options: ApplyOptions): void {
   if (options.force) console.log(`${label('Conflict policy')} force`);
   else if (options.conflictStrategy !== 'abort')
     console.log(`${label('Conflict policy')} ${options.conflictStrategy}`);
+  if (options.rewriteAll)
+    console.log(`${label('Write policy')} rewrite all payload files`);
+}
+
+function printRewriteExpansion(
+  pkg: LoadedPackage,
+  options: ApplyOptions,
+  changedPaths: Set<string>,
+): void {
+  if (!options.rewriteAll) return;
+  const unchangedPayloadFiles = packagePayloadFiles(pkg.manifest.files).filter(
+    (file) => !changedPaths.has(file.path),
+  ).length;
+  if (unchangedPayloadFiles > 0)
+    console.log(
+      `${label('Rewrite expansion')} ${unchangedPayloadFiles} unchanged ` +
+        `payload file${unchangedPayloadFiles === 1 ? '' : 's'} will also be written`,
+    );
+}
+
+function applySummary(
+  changedPaths: number,
+  writtenFiles: number,
+  modeOnlyFiles: number,
+): string {
+  const details: string[] = [];
+  if (writtenFiles > 0)
+    details.push(
+      `${writtenFiles} file${writtenFiles === 1 ? '' : 's'} written`,
+    );
+  if (modeOnlyFiles > 0)
+    details.push(
+      `${modeOnlyFiles} mode-only change${modeOnlyFiles === 1 ? '' : 's'}`,
+    );
+  const suffix = details.length > 0 ? ` (${details.join(', ')})` : '';
+  return `${changedPaths} path${changedPaths === 1 ? '' : 's'}${suffix}`;
 }
 
 export async function applyCommand(
@@ -158,9 +195,18 @@ export async function applyCommand(
       : undefined;
 
   printPackageMetadata(pkg, context);
-  printConflictPolicy(options);
+  printApplyPolicies(options);
   console.log('');
   console.log(formatChanges(comparison.changes));
+  printRewriteExpansion(
+    pkg,
+    options,
+    new Set(
+      comparison.changes
+        .filter((change) => change.kind !== 'UNCHANGED')
+        .map((change) => change.path),
+    ),
+  );
   console.log('');
   await confirmProjectMismatch(projectMismatch, options);
   if (projectMismatch && !options.dryRun) console.log('');
@@ -175,10 +221,22 @@ export async function applyCommand(
   );
   if (options.dryRun) {
     console.log(
-      `${color.cyan('Dry run complete.')} ${result.changedPaths} paths may be changed.`,
+      `${color.light('Dry run complete.')} ${applySummary(
+        result.changedPaths,
+        result.writtenFiles,
+        result.modeOnlyFiles,
+      )} may be changed.`,
     );
   } else {
-    success(`Applied ${result.changedPaths} paths.`);
+    if (result.changedPaths === 0) success('Project is already up to date.');
+    else
+      success(
+        `Applied ${applySummary(
+          result.changedPaths,
+          result.writtenFiles,
+          result.modeOnlyFiles,
+        )}.`,
+      );
     if (result.backupPath)
       console.log(`${label('Backup')} ${result.backupPath}`);
   }

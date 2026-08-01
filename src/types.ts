@@ -152,4 +152,5 @@ export interface ApplyOptions {
   deletePackageOnApply?: boolean;
   deleteSourcePackageOnApply?: boolean;
   saveDeletedCache?: boolean;
+  rewriteAll?: boolean;
 }

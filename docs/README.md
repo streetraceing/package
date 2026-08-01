@@ -42,6 +42,14 @@ Apply an approved update non-interactively:
 npx @streetraceing/package apply update.zip --yes
 ```
 
+Package writes only added, modified, or mode-changed payload files by default.
+Unchanged files are not opened for writing and keep their timestamps. To restore
+the former full-overlay behavior intentionally, pass:
+
+```bash
+package apply snapshot.zip --rewrite-all
+```
+
 Package checks whether the archive appears to belong to the target project. A
 likely mismatch requires a second interactive confirmation; `--yes` alone does
 not bypass it. For an intentional automated cross-project apply, review with
@@ -94,8 +102,10 @@ captured. Files over 10 MiB are still saved and produce an explicit warning.
 Use `--no-save-deleted-cache` for one command or set `saveDeletedCache` to `false`
 to disable the feature.
 
-Interactive output uses ANSI colors for statuses, warnings, labels, and diff
-kinds. Redirected output stays plain; `NO_COLOR=1` disables colors explicitly.
+Interactive output uses a restrained monochrome ANSI palette. Regular output is
+rendered with soft white and gray tones; warnings and errors remain distinct for
+safety. Help output is white-and-gray only. Redirected output stays plain;
+`NO_COLOR=1` disables colors explicitly.
 
 ## Backup versions
 
@@ -149,6 +159,8 @@ and replaces only the two reserved metadata files.
   `.packageshift` instructions for operations ZIP entries cannot express.
   `.packageshift` remains reserved CLI metadata and is never written into the
   target project, even when a malformed legacy manifest lists it as payload.
+- **Selective application:** unchanged payload files are not rewritten by
+  default. Use `--rewrite-all` only for an intentional full payload rewrite.
 - **Conflict-aware application:** use `diff` or `apply --dry-run` to review
   changes, then select `abort`, `overwrite`, or `skip` conflict handling when
   needed.

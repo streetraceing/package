@@ -12,6 +12,7 @@ copy of a project.
 - incremental update archives with additions, replacements, removals, moves, and
   permission changes;
 - comparison and dry-run support before an update is applied;
+- selective apply writes only added, modified, or mode-changed files by default;
 - path, archive-integrity, base-project, and per-file conflict checks, with
   versioned backups, rollback history, recovery backups, and a deleted-file cache;
 - readable colorized terminal output with automatic plain-text fallback.
@@ -52,9 +53,15 @@ npx @streetraceing/package zip --cwd /path/to/project --strategy=walk
 npx @streetraceing/package shift base.zip --message "Describe the update"
 npx @streetraceing/package metadata base.zip --message "Prepare metadata files"
 npx @streetraceing/package apply update.zip --conflict=skip
+npx @streetraceing/package apply snapshot.zip --rewrite-all
 npx @streetraceing/package inspect update.zip --json
 npx @streetraceing/package backup list
 ```
+
+By default, `apply` hashes the target payload and writes only files whose content
+or mode actually differs. Unchanged files keep their timestamps and are excluded
+from apply backups and deleted-file cache sessions. Use `--rewrite-all` only when
+you intentionally need to rewrite every payload file from the archive.
 
 Before a real `apply`, Package compares the archive identity with the target
 project. It uses a verified patch base when available, then `package.json` names,
@@ -162,9 +169,11 @@ the destructive operation continues. A successful command prints the cache path
 and total saved size. Disable this behavior globally with
 `"saveDeletedCache": false` or once with `--no-save-deleted-cache`.
 
-Terminal output uses restrained ANSI colors when connected to an interactive
-terminal. Colors are automatically disabled for redirected output and JSON mode;
-set `NO_COLOR=1` to disable them explicitly.
+Terminal output uses a restrained monochrome palette. Normal commands use soft
+white and gray tones, while warnings and errors retain distinct safety colors.
+Help output (`package -h`) is intentionally limited to white and gray shades.
+Colors are automatically disabled for redirected output and JSON mode; set
+`NO_COLOR=1` to disable them explicitly.
 
 ## Backup history
 
