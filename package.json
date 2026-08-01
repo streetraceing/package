@@ -24,7 +24,7 @@
     "start": "node ./dist/bin/package.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prettier:write": "prettier . --write",
-    "test": "tsx --test test/*.test.ts",
+    "test": "tsx test/run.ts",
     "test:built": "npm run build && node --test dist/test/*.test.js",
     "check": "npm run typecheck && npm test && npm run build",
     "pack:check": "npm pack --dry-run",
