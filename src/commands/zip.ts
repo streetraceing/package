@@ -13,7 +13,15 @@ import {
   DeletedCacheSession,
   reportDeletedCache,
 } from '../util/deleted-cache.js';
-import { color, success, warning } from '../util/terminal.js';
+import {
+  color,
+  divider,
+  label,
+  section,
+  success,
+  symbol,
+  warning,
+} from '../util/terminal.js';
 import {
   legacyPackageManifestPath,
   packageManifestPath,
@@ -167,12 +175,19 @@ export async function createSnapshot(
   });
   if (!options.quiet) {
     const bytes = entries.reduce((sum, entry) => sum + entry.data.length, 0);
+    section('Snapshot created');
     success(`Created ${archivePath}`);
     console.log(
-      `${manifest.files.length} files, ${bytes.toLocaleString('en-US')} source bytes`,
+      `${color.muted(symbol.branch)} ${label('Files')} ${color.green(manifest.files.length.toLocaleString('en-US'))}`,
+    );
+    console.log(
+      `${color.muted(symbol.branch)} ${label('Source bytes')} ${color.blue(bytes.toLocaleString('en-US'))}`,
     );
     if (manifest.rootHash)
-      console.log(`${color.cyan('Root')} ${manifest.rootHash}`);
+      console.log(
+        `${color.muted(symbol.lastBranch)} ${label('Root')} ${color.cyan(manifest.rootHash)}`,
+      );
+    console.log(color.muted(divider(44)));
   }
   return archivePath;
 }

@@ -22,7 +22,15 @@ import {
   DeletedCacheSession,
   reportDeletedCache,
 } from '../util/deleted-cache.js';
-import { color, success, warning } from '../util/terminal.js';
+import {
+  color,
+  divider,
+  label,
+  section,
+  success,
+  symbol,
+  warning,
+} from '../util/terminal.js';
 
 export interface MetadataCommandOptions {
   message?: string;
@@ -163,14 +171,22 @@ export async function metadataCommand(
   reportDeletedCache(deletedCache, options.quiet);
 
   if (options.quiet) return;
+  section('Metadata generated');
   success(`Created ${manifestTarget}`);
   success(`Created ${shiftTarget}`);
-  console.log(`${manifest.files.length} manifest files`);
-  console.log(`${structuralOperations} structural operations`);
+  console.log(
+    `${color.muted(symbol.branch)} ${label('Manifest files')} ${color.green(String(manifest.files.length))}`,
+  );
+  console.log(
+    `${color.muted(symbol.branch)} ${label('Structural operations')} ${color.magenta(String(structuralOperations))}`,
+  );
   if (baseline)
-    console.log(`${color.cyan('Base')} ${baseline.manifest.rootHash}`);
+    console.log(
+      `${color.muted(symbol.lastBranch)} ${label('Base')} ${color.cyan(baseline.manifest.rootHash)}`,
+    );
   else
     warning(
       `no baseline was provided or found; ${packageShiftPath} contains no structural changes`,
     );
+  console.log(color.muted(divider(44)));
 }

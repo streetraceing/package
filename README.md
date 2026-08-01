@@ -169,11 +169,15 @@ the destructive operation continues. A successful command prints the cache path
 and total saved size. Disable this behavior globally with
 `"saveDeletedCache": false` or once with `--no-save-deleted-cache`.
 
-Terminal output uses a restrained monochrome palette. Normal commands use soft
-white and gray tones, while warnings and errors retain distinct safety colors.
-Help output (`package -h`) is intentionally limited to white and gray shades.
-Colors are automatically disabled for redirected output and JSON mode; set
-`NO_COLOR=1` to disable them explicitly.
+Terminal output uses two complementary palettes. Help and reference screens
+(`package -h`) intentionally stay in soft white and gray shades. Operational
+commands such as `zip`, `shift`, `check`, `diff`, `apply`, `metadata`, and
+`backup` use consistent semantic colors, compact status symbols, tree branches,
+and dividers so important state is easier to scan. Green marks successful work,
+cyan/blue marks information and modified files, magenta marks structural
+operations, yellow marks cautions and mode changes, and red marks removals or
+errors. Colors are automatically disabled for redirected output and JSON mode;
+set `NO_COLOR=1` to disable them explicitly.
 
 ## Backup history
 

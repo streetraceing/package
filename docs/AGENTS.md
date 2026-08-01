@@ -857,9 +857,12 @@ For CI or agent automation:
   application;
 - inspect terminal warnings even when the command exit status is successful.
 
-Interactive output uses a restrained monochrome palette. Normal command output
-uses soft white and gray tones, while warnings and errors keep distinct safety
-colors. Help output (`package -h`) uses only white and gray shades. Color is
+Interactive output distinguishes documentation from active operations. Help
+output (`package -h`) uses only white and gray shades. Operational commands use
+semantic colors plus compact symbols, branches, arrows, and dividers so an agent
+or human can scan results quickly: green means successful work or additions,
+cyan/blue means information or modifications, magenta means structural actions,
+yellow means caution or mode changes, and red means removals or errors. Color is
 automatically disabled when output is redirected or JSON is requested. Set
 `NO_COLOR=1` to disable ANSI output explicitly.
 

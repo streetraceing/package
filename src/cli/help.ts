@@ -64,7 +64,8 @@ Backups are stored outside projects in:
 Deleted/replaced files are cached by default in:
   ~/streetraceing/.package/cache/<project-id>/<operation-id>
 
-Files larger than 10 MiB are cached with a warning. Help uses white/gray tones.
+Files larger than 10 MiB are cached with a warning.
+Help stays white/gray; operational commands use semantic colors and symbols.
 Set NO_COLOR to disable ANSI colors.
 
 Metadata and shift options:

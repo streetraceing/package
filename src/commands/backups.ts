@@ -10,7 +10,14 @@ import {
   DeletedCacheSession,
   reportDeletedCache,
 } from '../util/deleted-cache.js';
-import { color, label, success } from '../util/terminal.js';
+import {
+  color,
+  divider,
+  label,
+  section,
+  success,
+  symbol,
+} from '../util/terminal.js';
 
 function requireSelector(value: string | undefined, action: string): string {
   if (value) return value;
@@ -55,20 +62,35 @@ export async function backupCommand(
       );
       return;
     }
-    console.log(`${label('Backup store')} ${projectBackupDirectory(cwd)}`);
+    section('Backup history');
+    console.log(
+      `${color.muted(symbol.lastBranch)} ${label('Store')} ${color.light(projectBackupDirectory(cwd))}`,
+    );
     if (versions.length === 0) {
-      console.log(color.dim('No backup versions found for this project.'));
+      console.log(
+        `${color.blue(symbol.info)} ${color.gray('No backup versions found for this project.')}`,
+      );
+      console.log(color.muted(divider(44)));
       return;
     }
+    console.log('');
     for (const [index, version] of versions.entries()) {
+      const marker =
+        index === versions.length - 1 ? symbol.lastBranch : symbol.branch;
       const source = version.metadata.sourceArchive?.name
-        ? `, source ${version.metadata.sourceArchive.name}`
+        ? ` ${color.muted('·')} ${color.blue(`source ${version.metadata.sourceArchive.name}`)}`
         : '';
-      const legacy = version.legacy ? ', legacy' : '';
+      const legacy = version.legacy
+        ? ` ${color.muted('·')} ${color.yellow('legacy')}`
+        : '';
       console.log(
-        `${color.cyan(String(index + 1))}. ${version.id}  ${version.metadata.kind}, ${version.metadata.paths.length} paths${source}${legacy}`,
+        `${color.muted(marker)} ${color.cyan(String(index + 1).padStart(2, '0'))} ${color.bold(version.id)}` +
+          ` ${color.muted('·')} ${color.magenta(version.metadata.kind)}` +
+          ` ${color.muted('·')} ${color.green(`${version.metadata.paths.length} paths`)}` +
+          `${source}${legacy}`,
       );
     }
+    console.log(color.muted(divider(44)));
     return;
   }
 
@@ -92,22 +114,38 @@ export async function backupCommand(
       );
       return;
     }
-    console.log(`${label('Version')} ${color.bold(selected.id)}`);
-    console.log(`${label('Kind')} ${selected.metadata.kind}`);
-    console.log(`${label('Created')} ${selected.metadata.createdAt}`);
-    console.log(`${label('Project')} ${selected.metadata.projectRoot}`);
-    console.log(`${label('Paths')} ${selected.metadata.paths.length}`);
-    console.log(`${label('Archive')} ${selected.archivePath}`);
+    section('Backup details');
+    console.log(
+      `${color.muted(symbol.branch)} ${label('Version')} ${color.bold(selected.id)}`,
+    );
+    console.log(
+      `${color.muted(symbol.branch)} ${label('Kind')} ${color.magenta(selected.metadata.kind)}`,
+    );
+    console.log(
+      `${color.muted(symbol.branch)} ${label('Created')} ${color.gray(selected.metadata.createdAt)}`,
+    );
+    console.log(
+      `${color.muted(symbol.branch)} ${label('Project')} ${color.light(selected.metadata.projectRoot)}`,
+    );
+    console.log(
+      `${color.muted(symbol.branch)} ${label('Paths')} ${color.green(String(selected.metadata.paths.length))}`,
+    );
+    console.log(
+      `${color.muted(symbol.branch)} ${label('Archive')} ${color.light(selected.archivePath)}`,
+    );
     if (selected.metadata.sourceArchive)
       console.log(
-        `${label('Source package')} ${selected.metadata.sourceArchive.name}`,
+        `${color.muted(symbol.branch)} ${label('Source package')} ${color.blue(selected.metadata.sourceArchive.name)}`,
       );
     if (selected.metadata.restores?.length)
       console.log(
-        `${label('Restores')} ${selected.metadata.restores.join(', ')}`,
+        `${color.muted(symbol.branch)} ${label('Restores')} ${color.magenta(selected.metadata.restores.join(', '))}`,
       );
     if (selected.legacy)
-      console.log(color.dim('Format: legacy project-local backup'));
+      console.log(
+        `${color.muted(symbol.lastBranch)} ${color.yellow('Legacy project-local backup format')}`,
+      );
+    console.log(color.muted(divider(44)));
     return;
   }
 
@@ -121,12 +159,18 @@ export async function backupCommand(
       yes,
       deletedCache,
     );
+    section('Backup restored');
     success(
       `Restored ${result.restoredVersions.length} backup version${result.restoredVersions.length === 1 ? '' : 's'} and ${result.changedPaths} paths.`,
     );
-    console.log(`${label('Target version')} ${result.selected.id}`);
-    console.log(`${label('Recovery backup')} ${result.recoveryBackupPath}`);
+    console.log(
+      `${color.muted(symbol.branch)} ${label('Target version')} ${color.cyan(result.selected.id)}`,
+    );
+    console.log(
+      `${color.muted(symbol.lastBranch)} ${label('Recovery backup')} ${color.light(result.recoveryBackupPath)}`,
+    );
     reportDeletedCache(deletedCache);
+    console.log(color.muted(divider(44)));
     return;
   }
 

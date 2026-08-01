@@ -15,7 +15,14 @@ import {
   DeletedCacheSession,
   reportDeletedCache,
 } from '../util/deleted-cache.js';
-import { color, success } from '../util/terminal.js';
+import {
+  color,
+  divider,
+  label,
+  section,
+  success,
+  symbol,
+} from '../util/terminal.js';
 
 export interface ShiftCommandOptions {
   output?: string;
@@ -104,11 +111,18 @@ export async function createShiftArchive(
   });
 
   if (!options.quiet) {
+    section('.packageshift archive created');
     success(`Created ${outputPath}`);
     console.log(
-      `${payloadFiles.length} payload files, ${structuralOperations} structural operations`,
+      `${color.muted(symbol.branch)} ${label('Payload files')} ${color.green(String(payloadFiles.length))}`,
     );
-    console.log(`${color.cyan('Base')} ${base.manifest.rootHash}`);
+    console.log(
+      `${color.muted(symbol.branch)} ${label('Structural operations')} ${color.magenta(String(structuralOperations))}`,
+    );
+    console.log(
+      `${color.muted(symbol.lastBranch)} ${label('Base')} ${color.cyan(base.manifest.rootHash)}`,
+    );
+    console.log(color.muted(divider(44)));
   }
   return outputPath;
 }

@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { PackageError } from '../errors.js';
-import { color, warning } from './terminal.js';
+import { color, label, symbol, warning } from './terminal.js';
 
 export type PackageHookName =
   'beforePackage' | 'afterPackage' | 'beforeApply' | 'afterApply';
@@ -88,7 +88,9 @@ export async function runPackageHooks(
 
   for (const script of scripts) {
     if (!context.quiet)
-      console.log(`${color.magenta(hook)}: ${color.bold(script)}`);
+      console.log(
+        `${color.magenta('⚙')} ${label(hook)} ${color.bold(script)} ${color.muted(`${symbol.arrow} ${context.command}`)}`,
+      );
     try {
       await runHookScript(script, hook, context);
     } catch (error) {

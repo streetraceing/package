@@ -102,10 +102,12 @@ captured. Files over 10 MiB are still saved and produce an explicit warning.
 Use `--no-save-deleted-cache` for one command or set `saveDeletedCache` to `false`
 to disable the feature.
 
-Interactive output uses a restrained monochrome ANSI palette. Regular output is
-rendered with soft white and gray tones; warnings and errors remain distinct for
-safety. Help output is white-and-gray only. Redirected output stays plain;
-`NO_COLOR=1` disables colors explicitly.
+Interactive output separates reference text from operational status. Help output
+is intentionally white-and-gray only. Operational commands use semantic colors,
+status symbols, tree branches, and dividers: green for success/additions, cyan or
+blue for information and modifications, magenta for structural operations,
+yellow for cautions and mode changes, and red for removals or errors. Redirected
+output stays plain; `NO_COLOR=1` disables colors explicitly.
 
 ## Backup versions
 

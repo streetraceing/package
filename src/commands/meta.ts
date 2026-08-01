@@ -10,7 +10,15 @@ import {
   DeletedCacheSession,
   reportDeletedCache,
 } from '../util/deleted-cache.js';
-import { color, label, success, warning } from '../util/terminal.js';
+import {
+  color,
+  divider,
+  label,
+  section,
+  success,
+  symbol,
+  warning,
+} from '../util/terminal.js';
 
 export async function inspectCommand(
   archivePath: string,
@@ -38,22 +46,40 @@ export async function inspectCommand(
     );
     return;
   }
+  section('Archive details');
   console.log(
-    `${label('Archive')} ${color.bold(path.resolve(cwd, archivePath))}`,
+    `${color.muted(symbol.branch)} ${label('Archive')} ${color.bold(path.resolve(cwd, archivePath))}`,
   );
-  console.log(`${label('Kind')} ${pkg.manifest.kind}`);
-  console.log(`${label('Manifest')} ${pkg.manifestSource}`);
-  console.log(`${label('Project')} ${pkg.manifest.project}`);
-  console.log(`${label('Created')} ${pkg.manifest.createdAt}`);
-  console.log(`${label('Files')} ${pkg.manifest.files.length}`);
-  console.log(`${label('Structural operations')} ${operations}`);
-  console.log(`${label('Root')} ${pkg.manifest.rootHash}`);
+  console.log(
+    `${color.muted(symbol.branch)} ${label('Kind')} ${color.magenta(pkg.manifest.kind)}`,
+  );
+  console.log(
+    `${color.muted(symbol.branch)} ${label('Manifest')} ${color.blue(pkg.manifestSource)}`,
+  );
+  console.log(
+    `${color.muted(symbol.branch)} ${label('Project')} ${color.light(pkg.manifest.project)}`,
+  );
+  console.log(
+    `${color.muted(symbol.branch)} ${label('Created')} ${color.gray(pkg.manifest.createdAt)}`,
+  );
+  console.log(
+    `${color.muted(symbol.branch)} ${label('Files')} ${color.green(String(pkg.manifest.files.length))}`,
+  );
+  console.log(
+    `${color.muted(symbol.branch)} ${label('Structural operations')} ${color.magenta(String(operations))}`,
+  );
+  console.log(
+    `${color.muted(symbol.branch)} ${label('Root')} ${color.cyan(pkg.manifest.rootHash)}`,
+  );
   if (pkg.manifest.baseRootHash)
-    console.log(`${label('Base')} ${pkg.manifest.baseRootHash}`);
+    console.log(
+      `${color.muted(symbol.branch)} ${label('Base')} ${color.cyan(pkg.manifest.baseRootHash)}`,
+    );
   if (pkg.manifest.sourcePackage)
     console.log(
-      `${label('Source package')} ${pkg.manifest.sourcePackage.name} (${pkg.manifest.sourcePackage.sha256})`,
+      `${color.muted(symbol.lastBranch)} ${label('Source package')} ${color.light(pkg.manifest.sourcePackage.name)} ${color.muted(`(${pkg.manifest.sourcePackage.sha256})`)}`,
     );
+  console.log(color.muted(divider(44)));
   if (pkg.ignoredPayloadMetadataPaths.length > 0)
     warning(
       `reserved CLI metadata listed as payload was ignored: ${pkg.ignoredPayloadMetadataPaths.join(', ')}`,
@@ -65,30 +91,34 @@ export async function checkCommand(
   cwd: string,
 ): Promise<void> {
   const pkg = await loadPackage(path.resolve(cwd, archivePath));
-  success(`OK ${path.resolve(cwd, archivePath)}`);
+  section('Archive check');
+  success(`Valid archive: ${path.resolve(cwd, archivePath)}`);
   const fileWord = pkg.manifest.files.length === 1 ? 'file' : 'files';
   if (pkg.manifestSource === 'generated') {
     console.log(
-      `No manifest found; validated as a .packageshift archive with ${pkg.manifest.files.length} payload ${fileWord}.`,
+      `${color.blue(symbol.info)} ${color.light(`No manifest found; validated as a .packageshift archive with ${pkg.manifest.files.length} payload ${fileWord}.`)}`,
     );
   } else if (pkg.manifestSource === 'legacy') {
     console.log(
-      `${pkg.manifest.files.length} payload ${fileWord} verified using legacy .packagemanifest metadata`,
+      `${color.green(symbol.success)} ${color.light(`${pkg.manifest.files.length} payload ${fileWord} verified using legacy .packagemanifest metadata`)}`,
     );
   } else {
-    console.log(`${pkg.manifest.files.length} payload ${fileWord} verified`);
+    console.log(
+      `${color.green(symbol.success)} ${color.light(`${pkg.manifest.files.length} payload ${fileWord} verified`)}`,
+    );
   }
   if (pkg.shift) {
     const instructionWord =
       pkg.shift.instructions.length === 1 ? 'instruction' : 'instructions';
     console.log(
-      `${pkg.shift.instructions.length} .packageshift ${instructionWord} parsed`,
+      `${color.magenta(symbol.success)} ${color.light(`${pkg.shift.instructions.length} .packageshift ${instructionWord} parsed`)}`,
     );
   }
   if (pkg.ignoredPayloadMetadataPaths.length > 0)
     warning(
       `reserved CLI metadata listed as payload was ignored: ${pkg.ignoredPayloadMetadataPaths.join(', ')}`,
     );
+  console.log(color.muted(divider(44)));
 }
 
 export async function listCommand(
@@ -197,8 +227,10 @@ export async function initCommand(
   if (exists && deletedCache)
     await deletedCache.cachePath(target, 'replace-config', '.packagerc');
 
+  section('Project initialization');
   await writeFile(target, exampleConfig, 'utf8');
   success(`Created ${target}`);
   await ensurePackageGitignore(cwd, deletedCache);
   reportDeletedCache(deletedCache);
+  console.log(color.muted(divider(44)));
 }

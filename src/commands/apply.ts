@@ -15,7 +15,15 @@ import {
   DeletedCacheSession,
   reportDeletedCache,
 } from '../util/deleted-cache.js';
-import { color, label, success, warning } from '../util/terminal.js';
+import {
+  color,
+  divider,
+  label,
+  section,
+  success,
+  symbol,
+  warning,
+} from '../util/terminal.js';
 import { packagePayloadFiles } from '../archive/metadata.js';
 import {
   confirmProjectMismatch,
@@ -107,15 +115,26 @@ async function runPostApplyLifecycle(
     await deleteAppliedPackage(context.archivePath, deletedCache);
 }
 
+function detailLine(
+  branch: typeof symbol.branch | typeof symbol.lastBranch,
+  name: string,
+  value: string,
+): void {
+  console.log(`${color.muted(branch)} ${label(name)} ${color.light(value)}`);
+}
+
 function printPackageMetadata(pkg: LoadedPackage, context: ApplyContext): void {
-  console.log(`${label('Package')} ${color.bold(context.archivePath)}`);
-  console.log(`${label('Target')}  ${context.projectRoot}`);
+  section('Apply plan');
+  detailLine(symbol.branch, 'Package', context.archivePath);
+  detailLine(symbol.lastBranch, 'Target', context.projectRoot);
   if (pkg.manifestSource === 'generated') {
     warning(
       'archive has no embedded manifest; applying ZIP-verified payload and .packageshift instructions without base verification.',
     );
   } else if (pkg.manifestSource === 'legacy') {
-    console.log(`${label('Manifest')} legacy .packagemanifest`);
+    console.log(
+      `${color.blue(symbol.info)} ${label('Manifest')} ${color.blue('legacy .packagemanifest')}`,
+    );
   }
   if (pkg.ignoredPayloadMetadataPaths.length > 0) {
     warning(
@@ -125,11 +144,16 @@ function printPackageMetadata(pkg: LoadedPackage, context: ApplyContext): void {
 }
 
 function printApplyPolicies(options: ApplyOptions): void {
-  if (options.force) console.log(`${label('Conflict policy')} force`);
+  const policies: string[] = [];
+  if (options.force) policies.push(`${color.red('conflicts: force')}`);
   else if (options.conflictStrategy !== 'abort')
-    console.log(`${label('Conflict policy')} ${options.conflictStrategy}`);
-  if (options.rewriteAll)
-    console.log(`${label('Write policy')} rewrite all payload files`);
+    policies.push(`${color.yellow(`conflicts: ${options.conflictStrategy}`)}`);
+  if (options.rewriteAll) policies.push(color.magenta('write: rewrite all'));
+  if (options.dryRun) policies.push(color.blue('mode: dry run'));
+  if (policies.length > 0)
+    console.log(
+      `${color.cyan(symbol.info)} ${label('Policies')} ${policies.join(color.muted('  |  '))}`,
+    );
 }
 
 function printRewriteExpansion(
@@ -143,7 +167,7 @@ function printRewriteExpansion(
   ).length;
   if (unchangedPayloadFiles > 0)
     console.log(
-      `${label('Rewrite expansion')} ${unchangedPayloadFiles} unchanged ` +
+      `${color.magenta(symbol.info)} ${label('Rewrite expansion')} ${color.magenta(String(unchangedPayloadFiles))} unchanged ` +
         `payload file${unchangedPayloadFiles === 1 ? '' : 's'} will also be written`,
     );
 }
@@ -152,11 +176,12 @@ function applySummary(
   changedPaths: number,
   writtenFiles: number,
   modeOnlyFiles: number,
+  planned = false,
 ): string {
   const details: string[] = [];
   if (writtenFiles > 0)
     details.push(
-      `${writtenFiles} file${writtenFiles === 1 ? '' : 's'} written`,
+      `${writtenFiles} file${writtenFiles === 1 ? '' : 's'} ${planned ? 'would be written' : 'written'}`,
     );
   if (modeOnlyFiles > 0)
     details.push(
@@ -197,6 +222,7 @@ export async function applyCommand(
   printPackageMetadata(pkg, context);
   printApplyPolicies(options);
   console.log('');
+  section('Changes');
   console.log(formatChanges(comparison.changes));
   printRewriteExpansion(
     pkg,
@@ -219,13 +245,18 @@ export async function applyCommand(
     },
     deletedCache,
   );
+
+  section(options.dryRun ? 'Dry-run result' : 'Apply result');
   if (options.dryRun) {
     console.log(
-      `${color.light('Dry run complete.')} ${applySummary(
-        result.changedPaths,
-        result.writtenFiles,
-        result.modeOnlyFiles,
-      )} may be changed.`,
+      `${color.blue(symbol.info)} ${color.blue('No files were written.')} ${color.light(
+        `${applySummary(
+          result.changedPaths,
+          result.writtenFiles,
+          result.modeOnlyFiles,
+          true,
+        )} would be changed.`,
+      )}`,
     );
   } else {
     if (result.changedPaths === 0) success('Project is already up to date.');
@@ -238,16 +269,19 @@ export async function applyCommand(
         )}.`,
       );
     if (result.backupPath)
-      console.log(`${label('Backup')} ${result.backupPath}`);
+      console.log(
+        `${color.green(symbol.branch)} ${label('Backup')} ${color.light(result.backupPath)}`,
+      );
   }
   if (result.overwrittenConflicts.length > 0)
     console.log(
-      `${label('Overwritten conflicts')} ${result.overwrittenConflicts.join(', ')}`,
+      `${color.orange(symbol.branch)} ${label('Overwritten conflicts')} ${color.orange(result.overwrittenConflicts.join(', '))}`,
     );
   if (result.skippedPaths.length > 0)
     console.log(
-      `${label('Skipped conflicts')} ${result.skippedPaths.join(', ')}`,
+      `${color.yellow(symbol.branch)} ${label('Skipped conflicts')} ${color.yellow(result.skippedPaths.join(', '))}`,
     );
+  console.log(color.muted(divider(44)));
 
   if (!options.dryRun) {
     await runPostApplyLifecycle(

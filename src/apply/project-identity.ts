@@ -4,7 +4,14 @@ import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import type { ApplyOptions, LoadedPackage } from '../types.js';
 import { PackageError } from '../errors.js';
-import { color, label, warning } from '../util/terminal.js';
+import {
+  color,
+  divider,
+  label,
+  section,
+  symbol,
+  warning,
+} from '../util/terminal.js';
 import { packagePayloadFiles } from '../archive/metadata.js';
 import { resolveInside } from '../util/path.js';
 
@@ -145,16 +152,26 @@ export async function detectProjectMismatch(
 }
 
 function printMismatch(mismatch: ProjectMismatch): void {
+  section('Project mismatch');
   warning('this archive appears to belong to a different project.');
   if (mismatch.archiveProject)
-    console.log(`${label('Archive project')} ${mismatch.archiveProject}`);
+    console.log(
+      `${color.muted(symbol.branch)} ${label('Archive project')} ${color.magenta(mismatch.archiveProject)}`,
+    );
   if (mismatch.archivePackageName)
-    console.log(`${label('Archive package')} ${mismatch.archivePackageName}`);
-  console.log(`${label('Target project')} ${mismatch.targetProject}`);
+    console.log(
+      `${color.muted(symbol.branch)} ${label('Archive package')} ${color.magenta(mismatch.archivePackageName)}`,
+    );
+  console.log(
+    `${color.muted(symbol.branch)} ${label('Target project')} ${color.cyan(mismatch.targetProject)}`,
+  );
   if (mismatch.targetPackageName)
-    console.log(`${label('Target package')} ${mismatch.targetPackageName}`);
+    console.log(
+      `${color.muted(symbol.lastBranch)} ${label('Target package')} ${color.cyan(mismatch.targetPackageName)}`,
+    );
   for (const reason of mismatch.reasons)
-    console.log(`  ${color.yellow('!')} ${reason}`);
+    console.log(`  ${color.yellow(symbol.warning)} ${color.yellow(reason)}`);
+  console.log(color.muted(divider(44)));
 }
 
 export async function confirmProjectMismatch(
