@@ -1,6 +1,6 @@
 {
   "name": "@streetraceing/package",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Package, compare, and safely apply project source archives from the command line.",
   "type": "module",
   "lint-staged": {
