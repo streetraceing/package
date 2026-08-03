@@ -170,7 +170,7 @@ function printMismatch(mismatch: ProjectMismatch): void {
       `${color.muted(symbol.lastBranch)} ${label('Target package')} ${color.cyan(mismatch.targetPackageName)}`,
     );
   for (const reason of mismatch.reasons)
-    console.log(`  ${color.yellow(symbol.warning)} ${color.yellow(reason)}`);
+    console.log(`${color.yellow(symbol.warning)} ${color.yellow(reason)}`);
   console.log(color.muted(divider(44)));
 }
 

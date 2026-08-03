@@ -108,6 +108,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
     else if (arg === '--no-gitignore') parsed.configOverrides.gitignore = false;
     else if (arg === '--npmignore') parsed.configOverrides.npmignore = true;
     else if (arg === '--no-npmignore') parsed.configOverrides.npmignore = false;
+    else if (arg === '--package-manager-ignore')
+      parsed.configOverrides.packageManagerIgnore = true;
+    else if (arg === '--no-package-manager-ignore')
+      parsed.configOverrides.packageManagerIgnore = false;
     else if (arg === '--dot') parsed.configOverrides.dot = true;
     else if (arg === '--no-dot') parsed.configOverrides.dot = false;
     else if (arg === '--follow-symlinks')
@@ -139,6 +143,14 @@ export function parseArgs(argv: string[]): ParsedArgs {
         );
       parsed.configOverrides.strategy = result.value;
       index = result.next;
+    } else if (arg.startsWith('--package-manager-ignore-file')) {
+      const result = takeValue(argv, index, '--package-manager-ignore-file');
+      parsed.configOverrides.packageManagerIgnoreFile = result.value;
+      index = result.next;
+    } else if (arg.startsWith('--package-manager')) {
+      const result = takeValue(argv, index, '--package-manager');
+      parsed.configOverrides.packageManager = result.value;
+      index = result.next;
     } else if (arg.startsWith('--ignore')) {
       const result = takeValue(argv, index, '--ignore');
       parsed.configOverrides.ignore = [
@@ -150,6 +162,20 @@ export function parseArgs(argv: string[]): ParsedArgs {
       const result = takeValue(argv, index, '--include');
       parsed.configOverrides.include = [
         ...(parsed.configOverrides.include ?? []),
+        result.value,
+      ];
+      index = result.next;
+    } else if (arg.startsWith('--force-ignore')) {
+      const result = takeValue(argv, index, '--force-ignore');
+      parsed.configOverrides.forceIgnore = [
+        ...(parsed.configOverrides.forceIgnore ?? []),
+        result.value,
+      ];
+      index = result.next;
+    } else if (arg.startsWith('--force-include')) {
+      const result = takeValue(argv, index, '--force-include');
+      parsed.configOverrides.forceInclude = [
+        ...(parsed.configOverrides.forceInclude ?? []),
         result.value,
       ];
       index = result.next;

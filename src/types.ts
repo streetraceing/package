@@ -12,8 +12,13 @@ export interface PackageConfig {
   strategy: CollectionStrategy;
   gitignore: boolean;
   npmignore: boolean;
+  packageManager: string;
+  packageManagerIgnore: boolean;
+  packageManagerIgnoreFile: string;
   include: string[];
   ignore: string[];
+  forceInclude: string[];
+  forceIgnore: string[];
   dot: boolean;
   followSymlinks: boolean;
   includeEmptyDirectories: boolean;
@@ -149,6 +154,7 @@ export interface ApplyOptions {
   conflictStrategy: ConflictStrategy;
   beforeApply?: string[];
   afterApply?: string[];
+  packageManager?: string;
   deletePackageOnApply?: boolean;
   deleteSourcePackageOnApply?: boolean;
   saveDeletedCache?: boolean;

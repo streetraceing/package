@@ -43,6 +43,7 @@ export async function createShiftArchive(
     root: config.root,
     archivePath: outputPath,
     command: 'shift',
+    packageManager: config.packageManager,
     quiet: options.quiet,
   });
   const base = await loadPackage(path.resolve(config.root, baseArchive));
@@ -107,6 +108,7 @@ export async function createShiftArchive(
     root: config.root,
     archivePath: outputPath,
     command: 'shift',
+    packageManager: config.packageManager,
     quiet: options.quiet,
   });
 

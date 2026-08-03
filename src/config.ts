@@ -14,8 +14,13 @@ export const defaultConfig: PackageConfig = {
   strategy: 'git',
   gitignore: true,
   npmignore: false,
+  packageManager: 'npm',
+  packageManagerIgnore: false,
+  packageManagerIgnoreFile: '.npmignore',
   include: ['**/*'],
   ignore: [],
+  forceInclude: [],
+  forceIgnore: [],
   dot: true,
   followSymlinks: false,
   includeEmptyDirectories: false,
@@ -72,8 +77,13 @@ function validateConfig(
     'strategy',
     'gitignore',
     'npmignore',
+    'packageManager',
+    'packageManagerIgnore',
+    'packageManagerIgnoreFile',
     'include',
     'ignore',
+    'forceInclude',
+    'forceIgnore',
     'dot',
     'followSymlinks',
     'includeEmptyDirectories',
@@ -113,7 +123,14 @@ function validateConfig(
     );
   }
 
-  const stringKeys = ['root', 'output', 'name', 'shiftFile'] as const;
+  const stringKeys = [
+    'root',
+    'output',
+    'name',
+    'shiftFile',
+    'packageManager',
+    'packageManagerIgnoreFile',
+  ] as const;
   for (const key of stringKeys) {
     if (
       config[key] !== undefined &&
@@ -129,6 +146,7 @@ function validateConfig(
   const booleanKeys = [
     'gitignore',
     'npmignore',
+    'packageManagerIgnore',
     'dot',
     'followSymlinks',
     'includeEmptyDirectories',
@@ -151,7 +169,12 @@ function validateConfig(
     }
   }
 
-  const arrayKeys = ['include', 'ignore'] as const;
+  const arrayKeys = [
+    'include',
+    'ignore',
+    'forceInclude',
+    'forceIgnore',
+  ] as const;
   for (const key of arrayKeys) {
     if (
       config[key] !== undefined &&
@@ -165,6 +188,23 @@ function validateConfig(
         'CONFIG_INVALID',
       );
     }
+  }
+
+  if (
+    config.npmignore !== undefined &&
+    config.packageManagerIgnore !== undefined &&
+    config.npmignore !== config.packageManagerIgnore
+  ) {
+    throw new PackageError(
+      `${sourceName}: npmignore and packageManagerIgnore cannot disagree.`,
+      'CONFIG_INVALID',
+    );
+  }
+  if (
+    config.packageManagerIgnore === undefined &&
+    config.npmignore !== undefined
+  ) {
+    config.packageManagerIgnore = config.npmignore;
   }
 
   const hookKeys = [

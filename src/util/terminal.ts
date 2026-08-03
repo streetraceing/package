@@ -20,20 +20,22 @@ const ansi = {
 } as const;
 
 export const symbol = {
-  success: '✓',
-  info: '●',
-  warning: '▲',
-  error: '✖',
-  section: '◆',
+  success: '└─',
+  info: '├─',
+  warning: '┞─',
+  error: '└─',
+  section: '┌',
   branch: '├─',
   lastBranch: '└─',
+  separator: '┊',
   arrow: '→',
-  add: '+',
-  modify: '~',
-  remove: '−',
-  move: '↪',
-  mode: '≋',
-  conflict: '!',
+  hook: '┞─',
+  add: '┞',
+  modify: '┞',
+  remove: '┞',
+  move: '┞',
+  mode: '┞',
+  conflict: '┞',
 } as const;
 
 function colorsEnabled(stream: OutputStream): boolean {
@@ -87,13 +89,13 @@ export function label(name: string): string {
 }
 
 export function section(title: string): void {
-  const left = color.muted('──');
+  const left = color.muted(`${symbol.section}─`);
   const right = color.muted('─'.repeat(Math.max(4, 30 - title.length)));
-  console.log(`${left} ${color.accent(`${symbol.section} ${title}`)} ${right}`);
+  console.log(`${left} ${color.accent(title)} ${right}`);
 }
 
 export function divider(width = 44): string {
-  return color.muted('─'.repeat(width));
+  return color.muted(`└${'─'.repeat(Math.max(1, width - 1))}`);
 }
 
 export function success(message: string): void {
@@ -106,7 +108,7 @@ export function info(message: string): void {
 
 export function warning(message: string): void {
   console.warn(
-    `${color.warningBold(`${symbol.warning} Warning`)} ${color.muted('·')} ${message}`,
+    `${color.warningBold(`${symbol.warning} Warning`)} ${color.muted(symbol.separator)} ${message}`,
   );
 }
 

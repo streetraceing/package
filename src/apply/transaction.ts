@@ -583,6 +583,7 @@ export async function applyPackage(
     root: options.cwd,
     archivePath: pkg.archivePath,
     command: 'apply',
+    packageManager: options.packageManager,
   });
 
   await cacheDestructivePaths(options.cwd, plan, deletedCache);

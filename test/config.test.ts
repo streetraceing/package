@@ -36,6 +36,11 @@ test('package init creates a schema-enabled .packagerc', async () => {
     assert.equal(parsed.$schema, configSchemaUrl);
     assert.equal(parsed.root, defaultConfig.root);
     assert.equal(parsed.renameThreshold, defaultConfig.renameThreshold);
+    assert.deepEqual(parsed.forceInclude, []);
+    assert.deepEqual(parsed.forceIgnore, []);
+    assert.equal(parsed.packageManager, 'npm');
+    assert.equal(parsed.packageManagerIgnore, false);
+    assert.equal(parsed.packageManagerIgnoreFile, '.npmignore');
     assert.deepEqual(parsed.beforePackage, []);
     assert.deepEqual(parsed.afterPackage, []);
     assert.deepEqual(parsed.beforeApply, []);
@@ -118,6 +123,27 @@ test('parses the explicit full rewrite apply flag', () => {
   assert.equal(args.rewriteAll, true);
 });
 
+test('parses force-selection and package-manager CLI overrides', () => {
+  const args = parseArgs([
+    'zip',
+    '--force-include',
+    'generated/required/**',
+    '--force-ignore=secrets/**',
+    '--package-manager',
+    'pnpm',
+    '--package-manager-ignore',
+    '--package-manager-ignore-file',
+    '.publishignore',
+  ]);
+  assert.deepEqual(args.configOverrides.forceInclude, [
+    'generated/required/**',
+  ]);
+  assert.deepEqual(args.configOverrides.forceIgnore, ['secrets/**']);
+  assert.equal(args.configOverrides.packageManager, 'pnpm');
+  assert.equal(args.configOverrides.packageManagerIgnore, true);
+  assert.equal(args.configOverrides.packageManagerIgnoreFile, '.publishignore');
+});
+
 test('configuration rejects options not declared by the schema', async () => {
   const workspace = await mkdtemp(path.join(tmpdir(), 'package-config-'));
   try {
@@ -183,6 +209,9 @@ test('configuration validates package hooks and apply cleanup settings', async (
           afterPackage: ['node scripts/report.mjs'],
           beforeApply: 'npm run migrate',
           afterApply: ['npm run prepare'],
+          packageManager: 'pnpm',
+          packageManagerIgnore: true,
+          packageManagerIgnoreFile: '.publishignore',
           deletePackageOnApply: true,
           deleteSourcePackageOnApply: true,
           saveDeletedCache: false,
@@ -197,6 +226,9 @@ test('configuration validates package hooks and apply cleanup settings', async (
     assert.deepEqual(loaded.config.afterPackage, ['node scripts/report.mjs']);
     assert.deepEqual(loaded.config.beforeApply, ['npm run migrate']);
     assert.deepEqual(loaded.config.afterApply, ['npm run prepare']);
+    assert.equal(loaded.config.packageManager, 'pnpm');
+    assert.equal(loaded.config.packageManagerIgnore, true);
+    assert.equal(loaded.config.packageManagerIgnoreFile, '.publishignore');
     assert.equal(loaded.config.deletePackageOnApply, true);
     assert.equal(loaded.config.deleteSourcePackageOnApply, true);
     assert.equal(loaded.config.saveDeletedCache, false);

@@ -88,6 +88,20 @@ support. The command also creates or updates `.gitignore` with a generated
 otherwise it uses its built-in ignore-aware walker. Git metadata, dependencies,
 previous package metadata, and backup directories are always excluded.
 
+Use `forceInclude` and `forceIgnore` for paths that must override the normal
+selection rules. They take precedence over `include`, `ignore`, dotfile filtering,
+`.gitignore`, and the configured package-manager ignore file; `forceIgnore` wins
+when both match. Internal safety exclusions still apply, so `.git`,
+`node_modules`, reserved Package metadata, and the ZIP currently being written
+cannot be forced into an archive.
+
+Lifecycle hooks use npm by default but support any package-manager or build-runner
+command. Set `packageManager` to `pnpm`, `yarn`, `bun`, or another executable,
+then use `{packageManager}` in a hook command. The resolved value is also
+available as `PACKAGE_MANAGER`. `packageManagerIgnore` optionally reads the
+configurable `packageManagerIgnoreFile`; its default is `.npmignore` for
+npm-compatible workflows. The legacy `npmignore` option remains supported.
+
 Generate ready metadata files without creating an archive:
 
 ```bash
@@ -119,10 +133,15 @@ Package lifecycle hooks and archive cleanup are opt-in:
 
 ```json
 {
-  "beforePackage": ["npm run build"],
+  "packageManager": "pnpm",
+  "packageManagerIgnore": true,
+  "packageManagerIgnoreFile": ".npmignore",
+  "forceInclude": [".env.example"],
+  "forceIgnore": ["secrets/**"],
+  "beforePackage": ["{packageManager} run build"],
   "afterPackage": ["node scripts/report-package.mjs"],
   "beforeApply": [],
-  "afterApply": ["npm run prepare"],
+  "afterApply": ["{packageManager} run prepare"],
   "deletePackageOnApply": false,
   "deleteSourcePackageOnApply": false,
   "saveDeletedCache": true
@@ -134,8 +153,8 @@ runs after validation and confirmation but before files are changed. `afterApply
 runs after a successful apply as a best-effort hook: failed commands produce
 warnings, do not roll back project changes, and do not stop later hooks or archive
 cleanup. Hooks run sequentially from the project root and receive `PACKAGE_HOOK`,
-`PACKAGE_COMMAND`, `PACKAGE_ROOT`, and `PACKAGE_ARCHIVE`. Empty arrays run
-nothing. `deletePackageOnApply` defaults to `false`; when enabled, the applied ZIP
+`PACKAGE_COMMAND`, `PACKAGE_ROOT`, `PACKAGE_ARCHIVE`, and `PACKAGE_MANAGER`.
+Empty arrays run nothing. `deletePackageOnApply` defaults to `false`; when enabled, the applied ZIP
 is deleted after the project files are applied, even if an `afterApply` command
 reports an error.
 
@@ -172,11 +191,10 @@ and total saved size. Disable this behavior globally with
 Terminal output uses two complementary palettes. Help and reference screens
 (`package -h`) intentionally stay in soft white and gray shades. Operational
 commands such as `zip`, `shift`, `check`, `diff`, `apply`, `metadata`, and
-`backup` use consistent semantic colors, compact status symbols, tree branches,
-and dividers so important state is easier to scan. Green marks successful work,
-cyan/blue marks information and modified files, magenta marks structural
-operations, yellow marks cautions and mode changes, and red marks removals or
-errors. Colors are automatically disabled for redirected output and JSON mode;
+`backup` use a consistent tree layout: `┌─` starts a section, `├─` and `└─` list
+details, and `┞─` marks warnings and change rows. Colors distinguish successful
+work/additions, information/modifications, structural operations, cautions, and
+removals or errors. Colors are automatically disabled for redirected output and JSON mode;
 set `NO_COLOR=1` to disable them explicitly.
 
 ## Backup history

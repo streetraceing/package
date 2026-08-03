@@ -63,8 +63,30 @@
     "npmignore": {
       "type": "boolean",
       "default": false,
-      "description": "Apply .npmignore rules during collection.",
-      "markdownDescription": "`false` - Ignore `.npmignore`; this preserves existing behavior.\n\n`true` - Exclude files matched by `.npmignore` in addition to other filters."
+      "description": "Legacy alias for packageManagerIgnore when using .npmignore.",
+      "markdownDescription": "Backward-compatible alias for `packageManagerIgnore`. New configuration should use `packageManagerIgnore` and `packageManagerIgnoreFile`.\n\n`true` - Apply the configured package-manager ignore file.\n\n`false` - Do not enable that filter through this legacy option."
+    },
+    "packageManager": {
+      "type": "string",
+      "default": "npm",
+      "description": "Package-manager or build-runner command exposed to lifecycle hooks.",
+      "markdownDescription": "Command used by the `{packageManager}` hook placeholder and exposed as `PACKAGE_MANAGER`. It defaults to `npm`, but may be `pnpm`, `yarn`, `bun`, or any executable command accepted by the shell.\n\nPackage never rewrites explicit hook commands; use `{packageManager}` where the configured command should be substituted.",
+      "minLength": 1,
+      "examples": ["npm", "pnpm", "yarn", "bun"]
+    },
+    "packageManagerIgnore": {
+      "type": "boolean",
+      "default": false,
+      "description": "Apply the configured package-manager ignore file during collection.",
+      "markdownDescription": "`true` - Exclude paths matched by `packageManagerIgnoreFile` in addition to other filters.\n\n`false` - Do not read that file. `npmignore` remains a backward-compatible alias."
+    },
+    "packageManagerIgnoreFile": {
+      "type": "string",
+      "default": ".npmignore",
+      "description": "Ignore-file name used when packageManagerIgnore is enabled.",
+      "markdownDescription": "The ignore filename read in each traversed directory when `packageManagerIgnore` is `true`. The npm-compatible default is `.npmignore`; set another filename for a different build system or package manager.\n\nExamples: `.npmignore`, `.publishignore`, `.releaseignore`.",
+      "minLength": 1,
+      "examples": [".npmignore", ".publishignore"]
     },
     "include": {
       "type": "array",
@@ -88,6 +110,28 @@
         "minLength": 1
       },
       "examples": [[], ["dist/**", "coverage/**"]]
+    },
+    "forceInclude": {
+      "type": "array",
+      "default": [],
+      "description": "Glob patterns that include files despite normal selection and ignore rules.",
+      "markdownDescription": "Paths matching these project-relative globs are included even when excluded by `include`, `ignore`, dotfile filtering, `.gitignore`, or the configured package-manager ignore file.\n\nSafety exclusions still win: `.git`, `node_modules`, reserved Package metadata, and the archive currently being written are never collected. `forceIgnore` has higher priority than `forceInclude`.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "examples": [[], [".env.example", "generated/required/**"]]
+    },
+    "forceIgnore": {
+      "type": "array",
+      "default": [],
+      "description": "Glob patterns that exclude files despite normal include or forceInclude rules.",
+      "markdownDescription": "Highest-priority user-defined deny-list. Paths matching these project-relative globs are excluded even when `forceInclude`, `include`, or ignore-file negation would otherwise select them.\n\nSafety exclusions remain enforced independently.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "examples": [[], ["secrets/**", "**/*.local"]]
     },
     "dot": {
       "type": "boolean",
@@ -300,8 +344,13 @@
       "strategy": "git",
       "gitignore": true,
       "npmignore": false,
+      "packageManager": "npm",
+      "packageManagerIgnore": false,
+      "packageManagerIgnoreFile": ".npmignore",
       "include": ["**/*"],
       "ignore": ["dist/**", "coverage/**"],
+      "forceInclude": [],
+      "forceIgnore": [],
       "dot": true,
       "beforePackage": [],
       "afterPackage": [],

@@ -20,6 +20,7 @@ import { defaultConfig } from '../src/config.js';
 import { createSnapshot } from '../src/commands/zip.js';
 import { createShiftArchive } from '../src/commands/shift.js';
 import { metadataCommand } from '../src/commands/metadata.js';
+import { collectFiles } from '../src/files/collect.js';
 import { loadManifestFile, loadPackage } from '../src/manifest/load.js';
 import { comparePackageToProject } from '../src/commands/compare.js';
 import { applyPackage } from '../src/apply/transaction.js';
@@ -259,6 +260,61 @@ test('generates ready .packagemanifest.json and .packageshift files', async () =
     assert.ok(shift.instructions.some((item) => item.type === 'BASE'));
     assert.ok(shift.instructions.some((item) => item.type === 'MOVE'));
     assert.ok(shift.instructions.some((item) => item.type === 'REMOVE'));
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test('force selection overrides ordinary filters but preserves internal exclusions', async () => {
+  const workspace = await mkdtemp(
+    path.join(tmpdir(), 'package-force-selection-'),
+  );
+  const source = path.join(workspace, 'source-project');
+  try {
+    await mkdir(source, { recursive: true });
+    await write(source, '.gitignore', 'git-ignored.txt\nignored-directory/\n');
+    await write(source, '.publishignore', 'manager-ignored.txt\n');
+    await write(source, 'src/selected.ts', 'selected\n');
+    await write(source, 'src/force-ignored.ts', 'ignored\n');
+    await write(source, 'git-ignored.txt', 'git ignored\n');
+    await write(source, 'ignored-directory/kept.txt', 'kept\n');
+    await write(source, 'ignored-directory/blocked.txt', 'blocked\n');
+    await write(source, 'manager-ignored.txt', 'manager ignored\n');
+    await write(source, '.force-dotfile', 'dotfile\n');
+    await write(source, 'node_modules/never.js', 'never\n');
+
+    const files = await collectFiles({
+      ...defaultConfig,
+      root: source,
+      output: workspace,
+      strategy: 'walk',
+      gitignore: true,
+      packageManager: 'pnpm',
+      packageManagerIgnore: true,
+      packageManagerIgnoreFile: '.publishignore',
+      include: ['src/**'],
+      ignore: ['src/force-ignored.ts'],
+      dot: false,
+      forceInclude: [
+        'git-ignored.txt',
+        'ignored-directory/**',
+        'manager-ignored.txt',
+        '.force-dotfile',
+        'node_modules/never.js',
+      ],
+      forceIgnore: ['ignored-directory/blocked.txt', 'src/force-ignored.ts'],
+    });
+
+    assert.deepEqual(
+      files.map((file) => file.relativePath),
+      [
+        '.force-dotfile',
+        'git-ignored.txt',
+        'ignored-directory/kept.txt',
+        'manager-ignored.txt',
+        'src/selected.ts',
+      ],
+    );
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }
@@ -671,7 +727,7 @@ test('runs beforePackage and afterPackage hooks for zip and shift', async () => 
         "const path = require('node:path');",
         'const phase = process.argv[2];',
         'const file = path.join(process.cwd(), `hook-${phase}-${process.env.PACKAGE_COMMAND}.json`);',
-        "fs.writeFileSync(file, JSON.stringify({ hook: process.env.PACKAGE_HOOK, command: process.env.PACKAGE_COMMAND, root: process.env.PACKAGE_ROOT, archive: process.env.PACKAGE_ARCHIVE }) + '\\n');",
+        "fs.writeFileSync(file, JSON.stringify({ hook: process.env.PACKAGE_HOOK, command: process.env.PACKAGE_COMMAND, root: process.env.PACKAGE_ROOT, archive: process.env.PACKAGE_ARCHIVE, packageManager: process.env.PACKAGE_MANAGER }) + '\\n');",
         '',
       ].join('\n'),
     );
@@ -681,8 +737,9 @@ test('runs beforePackage and afterPackage hooks for zip and shift', async () => 
       root: source,
       output: workspace,
       strategy: 'walk' as const,
-      beforePackage: ['node scripts/hook.cjs before'],
-      afterPackage: ['node scripts/hook.cjs after'],
+      packageManager: 'pnpm',
+      beforePackage: ['node scripts/hook.cjs before {packageManager}'],
+      afterPackage: ['node scripts/hook.cjs after {packageManager}'],
     };
     const baseArchive = await createSnapshot(config, {
       output: '../hooks-base.zip',
@@ -701,6 +758,7 @@ test('runs beforePackage and afterPackage hooks for zip and shift', async () => 
     assert.equal(afterZip.hook, 'afterPackage');
     assert.equal(afterZip.command, 'zip');
     assert.equal(afterZip.archive, baseArchive);
+    assert.equal(afterZip.packageManager, 'pnpm');
 
     await write(source, 'src/index.ts', 'export const value = 2;\n');
     const shiftArchive = await createShiftArchive('../hooks-base.zip', config, {
@@ -719,6 +777,7 @@ test('runs beforePackage and afterPackage hooks for zip and shift', async () => 
     assert.equal(afterShift.hook, 'afterPackage');
     assert.equal(afterShift.command, 'shift');
     assert.equal(afterShift.archive, shiftArchive);
+    assert.equal(afterShift.packageManager, 'pnpm');
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }
@@ -799,6 +858,7 @@ test('runs beforeApply and afterApply around successful apply', async () => {
         '  command: process.env.PACKAGE_COMMAND,',
         '  root: process.env.PACKAGE_ROOT,',
         '  archive: process.env.PACKAGE_ARCHIVE,',
+        '  packageManager: process.env.PACKAGE_MANAGER,',
         '  archiveExists: fs.existsSync(process.env.PACKAGE_ARCHIVE),',
         "  content: fs.readFileSync(source, 'utf8'),",
         '};',
@@ -817,7 +877,7 @@ test('runs beforeApply and afterApply around successful apply', async () => {
       output: '../apply-hooks.zip',
       quiet: true,
     });
-    const hookScripts = ['node scripts/apply-hook.cjs'];
+    const hookScripts = ['node scripts/apply-hook.cjs {packageManager}'];
 
     await applyCommand(archive, {
       cwd: target,
@@ -828,6 +888,7 @@ test('runs beforeApply and afterApply around successful apply', async () => {
       conflictStrategy: 'overwrite',
       beforeApply: hookScripts,
       afterApply: hookScripts,
+      packageManager: 'yarn',
       deletePackageOnApply: false,
     });
     await assert.rejects(
@@ -844,6 +905,7 @@ test('runs beforeApply and afterApply around successful apply', async () => {
       conflictStrategy: 'overwrite',
       beforeApply: hookScripts,
       afterApply: hookScripts,
+      packageManager: 'yarn',
       deletePackageOnApply: true,
     });
 
@@ -859,6 +921,7 @@ test('runs beforeApply and afterApply around successful apply', async () => {
       ['beforeApply', 'afterApply'],
     );
     assert.ok(entries.every((entry) => entry.command === 'apply'));
+    assert.ok(entries.every((entry) => entry.packageManager === 'yarn'));
     assert.equal(entries[0]?.content, 'export const value = "old";\n');
     assert.equal(entries[1]?.content, 'export const value = "new";\n');
     assert.ok(entries.every((entry) => entry.archiveExists === true));

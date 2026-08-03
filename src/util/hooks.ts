@@ -11,6 +11,7 @@ export interface PackageHookContext {
   root: string;
   archivePath: string;
   command: PackageCommandName;
+  packageManager?: string;
   quiet?: boolean;
 }
 
@@ -40,7 +41,12 @@ function runHookScript(
   context: PackageHookContext,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(script, {
+    const packageManager = context.packageManager ?? 'npm';
+    const resolvedScript = script.replaceAll(
+      '{packageManager}',
+      packageManager,
+    );
+    const child = spawn(resolvedScript, {
       cwd: context.root,
       shell: true,
       stdio: 'inherit',
@@ -50,11 +56,18 @@ function runHookScript(
         PACKAGE_COMMAND: context.command,
         PACKAGE_ROOT: context.root,
         PACKAGE_ARCHIVE: context.archivePath,
+        PACKAGE_MANAGER: packageManager,
       },
     });
 
     child.once('error', (error) => {
-      reject(packageHookError(hook, script, `cannot start: ${error.message}`));
+      reject(
+        packageHookError(
+          hook,
+          resolvedScript,
+          `cannot start: ${error.message}`,
+        ),
+      );
     });
     child.once('close', (code, signal) => {
       if (code === 0) {
@@ -64,7 +77,7 @@ function runHookScript(
       const detail = signal
         ? `signal ${signal}`
         : `exit code ${code ?? 'unknown'}`;
-      reject(packageHookError(hook, script, detail));
+      reject(packageHookError(hook, resolvedScript, detail));
     });
   });
 }
@@ -87,9 +100,14 @@ export async function runPackageHooks(
   const failures: PackageHookFailure[] = [];
 
   for (const script of scripts) {
+    const packageManager = context.packageManager ?? 'npm';
+    const resolvedScript = script.replaceAll(
+      '{packageManager}',
+      packageManager,
+    );
     if (!context.quiet)
       console.log(
-        `${color.magenta('⚙')} ${label(hook)} ${color.bold(script)} ${color.muted(`${symbol.arrow} ${context.command}`)}`,
+        `${color.magenta(symbol.hook)} ${label(hook)} ${color.bold(resolvedScript)} ${color.muted(`${symbol.arrow} ${context.command}`)}`,
       );
     try {
       await runHookScript(script, hook, context);

@@ -319,6 +319,11 @@ Example:
   "gitignore": true,
   "dot": true,
   "ignore": ["coverage/**"],
+  "forceInclude": [],
+  "forceIgnore": [],
+  "packageManager": "npm",
+  "packageManagerIgnore": false,
+  "packageManagerIgnoreFile": ".npmignore",
   "beforePackage": [],
   "afterPackage": [],
   "beforeApply": [],
@@ -522,10 +527,11 @@ Hooks may be one shell command string or an array of commands.
 
 ```json
 {
-  "beforePackage": ["npm run typecheck"],
+  "packageManager": "npm",
+  "beforePackage": ["{packageManager} run typecheck"],
   "afterPackage": ["node scripts/report-package.mjs"],
-  "beforeApply": ["npm run preapply"],
-  "afterApply": ["npm install", "npm run build"]
+  "beforeApply": ["{packageManager} run preapply"],
+  "afterApply": ["{packageManager} install", "{packageManager} run build"]
 }
 ```
 
@@ -546,7 +552,11 @@ PACKAGE_HOOK
 PACKAGE_COMMAND
 PACKAGE_ROOT
 PACKAGE_ARCHIVE
+PACKAGE_MANAGER
 ```
+
+`packageManager` defaults to `npm`, but may name `pnpm`, `yarn`, `bun`, or any
+other shell command. `{packageManager}` is replaced before a hook starts.
 
 Security rule for AI agents: do not add or modify hooks without explicit user
 approval. Hooks execute arbitrary shell commands.
@@ -859,10 +869,11 @@ For CI or agent automation:
 
 Interactive output distinguishes documentation from active operations. Help
 output (`package -h`) uses only white and gray shades. Operational commands use
-semantic colors plus compact symbols, branches, arrows, and dividers so an agent
-or human can scan results quickly: green means successful work or additions,
-cyan/blue means information or modifications, magenta means structural actions,
-yellow means caution or mode changes, and red means removals or errors. Color is
+one consistent tree: `┌─` starts a section, `├─` and `└─` list details, and `┞─`
+marks warnings and changes. Semantic colors help an agent or human scan results
+quickly: green means successful work or additions, cyan/blue means information
+or modifications, magenta means structural actions, yellow means caution or mode
+changes, and red means removals or errors. Color is
 automatically disabled when output is redirected or JSON is requested. Set
 `NO_COLOR=1` to disable ANSI output explicitly.
 

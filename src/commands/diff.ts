@@ -54,11 +54,11 @@ export function formatChanges(changes: ProjectChange[]): string {
   lines.push('');
   lines.push(`  ${divider(42)}`);
   lines.push(
-    `  ${color.accent(`${visible.length} change${visible.length === 1 ? '' : 's'}`)} ${color.muted('·')} ${[
+    `  ${color.accent(`${visible.length} change${visible.length === 1 ? '' : 's'}`)} ${color.muted(symbol.separator)} ${[
       ...counts.entries(),
     ]
       .map(([kind, count]) => countLabel(kind, count))
-      .join(color.muted('  |  '))}`,
+      .join(color.muted(`  ${symbol.separator}  `))}`,
   );
   return lines.join('\n');
 }

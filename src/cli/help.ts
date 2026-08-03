@@ -29,9 +29,14 @@ Core options:
   -o, --output <path>         Output archive path
   --ignore <glob>             Add an ignore pattern; repeatable
   --include <glob>            Add an include pattern; repeatable
+  --force-include <glob>      Include despite normal selection and ignore rules; repeatable
+  --force-ignore <glob>       Exclude despite normal selection and include rules; repeatable
   --strategy <git|walk>       File collection strategy
   --[no-]gitignore            Enable or disable .gitignore handling
-  --[no-]npmignore            Enable or disable .npmignore handling
+  --[no-]npmignore            Legacy alias for package-manager ignore handling
+  --package-manager <name>    Lifecycle package manager / build runner (default: npm)
+  --[no-]package-manager-ignore  Enable or disable the configured ignore file
+  --package-manager-ignore-file <path>  Ignore filename for the configured manager
   --[no-]dot                  Include or exclude dotfiles
   --compression-level <0-9>   ZIP compression level
   --json                      Machine-readable output

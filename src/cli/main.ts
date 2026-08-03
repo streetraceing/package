@@ -72,6 +72,16 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     merged.ignore = [...loaded.config.ignore, ...args.configOverrides.ignore];
   if (args.configOverrides.include)
     merged.include = args.configOverrides.include;
+  if (args.configOverrides.forceInclude)
+    merged.forceInclude = [
+      ...loaded.config.forceInclude,
+      ...args.configOverrides.forceInclude,
+    ];
+  if (args.configOverrides.forceIgnore)
+    merged.forceIgnore = [
+      ...loaded.config.forceIgnore,
+      ...args.configOverrides.forceIgnore,
+    ];
   const config = resolveConfigPaths(merged, projectCwd);
 
   if (args.command === 'zip') {
@@ -105,6 +115,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       conflictStrategy: args.conflictStrategy ?? config.conflictStrategy,
       beforeApply: config.beforeApply,
       afterApply: config.afterApply,
+      packageManager: config.packageManager,
       deletePackageOnApply:
         args.deletePackageOnApply ?? config.deletePackageOnApply,
       deleteSourcePackageOnApply:

@@ -51,19 +51,35 @@ function isPackageMetadataPath(
   return relativePath === normalizeRelativePath(config.shiftFile);
 }
 
-function passesPatterns(
+function isNeverPackaged(
   relativePath: string,
   config: PackageConfig,
   outputArchive?: string,
 ): boolean {
   if (hardIgnored.some((pattern) => matchesGlob(relativePath, pattern)))
-    return false;
-  if (isPackageMetadataPath(relativePath, config)) return false;
-  if (
-    outputArchive &&
+    return true;
+  if (isPackageMetadataPath(relativePath, config)) return true;
+  return (
+    outputArchive !== undefined &&
     path.resolve(config.root, relativePath) === path.resolve(outputArchive)
-  )
-    return false;
+  );
+}
+
+function matchesAny(
+  relativePath: string,
+  patterns: readonly string[],
+): boolean {
+  return patterns.some((pattern) => matchesGlob(relativePath, pattern));
+}
+
+function passesPatterns(
+  relativePath: string,
+  config: PackageConfig,
+  outputArchive?: string,
+): boolean {
+  if (isNeverPackaged(relativePath, config, outputArchive)) return false;
+  if (matchesAny(relativePath, config.forceIgnore)) return false;
+  if (matchesAny(relativePath, config.forceInclude)) return true;
   if (!config.dot && isDotPath(relativePath)) return false;
   const included =
     config.include.length === 0 ||
@@ -72,6 +88,73 @@ function passesPatterns(
   if (config.ignore.some((pattern) => matchesGlob(relativePath, pattern)))
     return false;
   return true;
+}
+
+async function collectForceIncludedFiles(
+  config: PackageConfig,
+  outputArchive?: string,
+): Promise<CollectedFile[]> {
+  if (config.forceInclude.length === 0) return [];
+  const files: CollectedFile[] = [];
+
+  async function walk(
+    directory: string,
+    relativeDirectory: string,
+  ): Promise<void> {
+    const entries = await readdir(directory, { withFileTypes: true });
+    entries.sort((left, right) => left.name.localeCompare(right.name));
+    for (const entry of entries) {
+      const relativePath = toPosixPath(
+        path.posix.join(relativeDirectory, entry.name),
+      );
+      const absolutePath = path.join(directory, entry.name);
+      if (isNeverPackaged(relativePath, config, outputArchive)) continue;
+      if (matchesAny(relativePath, config.forceIgnore)) continue;
+
+      if (entry.isSymbolicLink()) {
+        if (!config.followSymlinks) continue;
+        const resolved = await realpath(absolutePath);
+        const relation = path.relative(config.root, resolved);
+        if (relation.startsWith('..') || path.isAbsolute(relation)) {
+          throw new PackageError(
+            `Symbolic link points outside the project: ${relativePath}`,
+            'SYMLINK_OUTSIDE_ROOT',
+          );
+        }
+        const stat = await lstat(resolved);
+        if (stat.isDirectory()) await walk(resolved, relativePath);
+        else if (
+          stat.isFile() &&
+          matchesAny(relativePath, config.forceInclude)
+        ) {
+          files.push({
+            absolutePath: resolved,
+            relativePath,
+            size: stat.size,
+            mode: stat.mode & 0o777,
+            mtime: stat.mtime,
+          });
+        }
+      } else if (entry.isDirectory()) {
+        await walk(absolutePath, relativePath);
+      } else if (
+        entry.isFile() &&
+        matchesAny(relativePath, config.forceInclude)
+      ) {
+        const stat = await lstat(absolutePath);
+        files.push({
+          absolutePath,
+          relativePath,
+          size: stat.size,
+          mode: stat.mode & 0o777,
+          mtime: stat.mtime,
+        });
+      }
+    }
+  }
+
+  await walk(config.root, '');
+  return files;
 }
 
 async function collectWithGit(
@@ -124,8 +207,9 @@ async function loadIgnoreRules(
   const rules: IgnoreRule[] = [];
   const names: string[] = [];
   if (config.gitignore) names.push('.gitignore');
-  if (config.npmignore) names.push('.npmignore');
-  for (const name of names) {
+  if (config.npmignore || config.packageManagerIgnore)
+    names.push(config.packageManagerIgnoreFile);
+  for (const name of [...new Set(names)]) {
     try {
       const content = await readFile(path.join(directory, name), 'utf8');
       rules.push(...parseIgnoreFile(content, relativeDirectory));
@@ -220,10 +304,14 @@ export async function collectFiles(
   outputArchive?: string,
 ): Promise<CollectedFile[]> {
   const gitResult = await collectWithGit(config, outputArchive);
-  const files = gitResult ?? (await collectWithWalk(config, outputArchive));
+  const collected = gitResult ?? (await collectWithWalk(config, outputArchive));
+  const forced = await collectForceIncludedFiles(config, outputArchive);
+  const files = new Map<string, CollectedFile>();
+  for (const file of [...collected, ...forced])
+    files.set(file.relativePath, file);
   const duplicates = new Set<string>();
   const seen = new Set<string>();
-  for (const file of files) {
+  for (const file of files.values()) {
     const key =
       process.platform === 'win32'
         ? file.relativePath.toLowerCase()
@@ -237,7 +325,7 @@ export async function collectFiles(
       'DUPLICATE_PATH',
     );
   }
-  return files.sort((left, right) =>
+  return [...files.values()].sort((left, right) =>
     left.relativePath.localeCompare(right.relativePath),
   );
 }

@@ -110,6 +110,7 @@ export async function createSnapshot(
     root: config.root,
     archivePath,
     command: 'zip',
+    packageManager: config.packageManager,
     quiet: options.quiet,
   });
   const files = await collectFiles(config, archivePath);
@@ -171,6 +172,7 @@ export async function createSnapshot(
     root: config.root,
     archivePath,
     command: 'zip',
+    packageManager: config.packageManager,
     quiet: options.quiet,
   });
   if (!options.quiet) {

@@ -91,6 +91,7 @@ async function runAfterApplyHooks(
       root: context.projectRoot,
       archivePath: context.archivePath,
       command: 'apply',
+      packageManager: options.packageManager,
     },
     { failureMode: 'warn' },
   );
@@ -152,7 +153,7 @@ function printApplyPolicies(options: ApplyOptions): void {
   if (options.dryRun) policies.push(color.blue('mode: dry run'));
   if (policies.length > 0)
     console.log(
-      `${color.cyan(symbol.info)} ${label('Policies')} ${policies.join(color.muted('  |  '))}`,
+      `${color.cyan(symbol.info)} ${label('Policies')} ${policies.join(color.muted(`  ${symbol.separator}  `))}`,
     );
 }
 

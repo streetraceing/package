@@ -57,14 +57,34 @@ not bypass it. For an intentional automated cross-project apply, review with
 
 Run `npx @streetraceing/package --help` for the complete command reference.
 
+## File-selection priorities
+
+`forceInclude` and `forceIgnore` are repeatable project-relative glob lists for
+exceptions to normal selection. They override `include`, `ignore`, dotfile
+filtering, `.gitignore`, and the configured package-manager ignore file.
+`forceIgnore` wins if both lists match. Package still never collects `.git`,
+`node_modules`, reserved metadata files, or the archive currently being written.
+
+Use `packageManager` to select the command exposed to lifecycle hooks. It is
+`npm` by default but accepts `pnpm`, `yarn`, `bun`, or any build runner. In hook
+commands, `{packageManager}` expands to that value and `PACKAGE_MANAGER` exposes
+it to child processes. Enable `packageManagerIgnore` to read
+`packageManagerIgnoreFile` (default `.npmignore`); `npmignore` remains a legacy
+alias.
+
 ## Optional package lifecycle settings
 
 ```json
 {
-  "beforePackage": ["npm run build"],
+  "packageManager": "pnpm",
+  "packageManagerIgnore": true,
+  "packageManagerIgnoreFile": ".npmignore",
+  "forceInclude": [".env.example"],
+  "forceIgnore": ["secrets/**"],
+  "beforePackage": ["{packageManager} run build"],
   "afterPackage": ["node scripts/report-package.mjs"],
   "beforeApply": [],
-  "afterApply": ["npm run prepare"],
+  "afterApply": ["{packageManager} run prepare"],
   "deletePackageOnApply": false,
   "deleteSourcePackageOnApply": false,
   "saveDeletedCache": true
@@ -85,7 +105,8 @@ Run `npx @streetraceing/package --help` for the complete command reference.
   apply. Ambiguous or changed archives are preserved. It is `false` by default.
 
 Hook commands run sequentially from the project root and receive
-`PACKAGE_HOOK`, `PACKAGE_COMMAND`, `PACKAGE_ROOT`, and `PACKAGE_ARCHIVE`.
+`PACKAGE_HOOK`, `PACKAGE_COMMAND`, `PACKAGE_ROOT`, `PACKAGE_ARCHIVE`, and
+`PACKAGE_MANAGER`.
 
 ## Deleted-file cache
 
@@ -103,10 +124,10 @@ Use `--no-save-deleted-cache` for one command or set `saveDeletedCache` to `fals
 to disable the feature.
 
 Interactive output separates reference text from operational status. Help output
-is intentionally white-and-gray only. Operational commands use semantic colors,
-status symbols, tree branches, and dividers: green for success/additions, cyan or
-blue for information and modifications, magenta for structural operations,
-yellow for cautions and mode changes, and red for removals or errors. Redirected
+is intentionally white-and-gray only. Operational output uses a consistent tree:
+`┌─` starts a section, `├─` and `└─` list details, and `┞─` marks warnings and
+changes. Semantic colors distinguish success/additions, information/modifications,
+structural operations, cautions, and removals or errors. Redirected
 output stays plain; `NO_COLOR=1` disables colors explicitly.
 
 ## Backup versions

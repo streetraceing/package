@@ -78,15 +78,15 @@ export async function backupCommand(
       const marker =
         index === versions.length - 1 ? symbol.lastBranch : symbol.branch;
       const source = version.metadata.sourceArchive?.name
-        ? ` ${color.muted('·')} ${color.blue(`source ${version.metadata.sourceArchive.name}`)}`
+        ? ` ${color.muted(symbol.separator)} ${color.blue(`source ${version.metadata.sourceArchive.name}`)}`
         : '';
       const legacy = version.legacy
-        ? ` ${color.muted('·')} ${color.yellow('legacy')}`
+        ? ` ${color.muted(symbol.separator)} ${color.yellow('legacy')}`
         : '';
       console.log(
         `${color.muted(marker)} ${color.cyan(String(index + 1).padStart(2, '0'))} ${color.bold(version.id)}` +
-          ` ${color.muted('·')} ${color.magenta(version.metadata.kind)}` +
-          ` ${color.muted('·')} ${color.green(`${version.metadata.paths.length} paths`)}` +
+          ` ${color.muted(symbol.separator)} ${color.magenta(version.metadata.kind)}` +
+          ` ${color.muted(symbol.separator)} ${color.green(`${version.metadata.paths.length} paths`)}` +
           `${source}${legacy}`,
       );
     }
