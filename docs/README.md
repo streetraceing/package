@@ -4,6 +4,15 @@ Package is a dependency-free TypeScript CLI for creating project source
 snapshots, generating update archives, and safely applying them to another copy
 of a project.
 
+## Recent updates
+
+- `forceInclude` and `forceIgnore` can override ordinary file-selection and
+  ignore rules without weakening Package's internal safety exclusions.
+- Lifecycle hooks now support npm by default or another package manager/build
+  runner through `packageManager`, `{packageManager}`, and `PACKAGE_MANAGER`.
+- Operational output uses a consistent tree layout built from `┌─`, `├─`, `└─`,
+  and `┞─` symbols.
+
 ## Guides
 
 | Guide                                       | Use it when you need to...                                                                                     |
