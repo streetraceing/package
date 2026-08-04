@@ -13,6 +13,7 @@ Usage:
   package inspect <archive.zip> [--json]
   package check <archive.zip>
   package list [archive.zip] [--json]
+  package workspaces [selector] [--json]
   package init [--force]
 
 The archive-first form is also supported:
@@ -41,6 +42,18 @@ Core options:
   --compression-level <0-9>   ZIP compression level
   --json                      Machine-readable output
   -q, --quiet                 Reduce output
+
+Monorepo options:
+  -w, --workspace <selector>  Select by package name, path, basename, or glob; repeatable
+  --all-workspaces            Select every detected workspace
+  --workspace-pattern <glob>  Add a workspace directory pattern; repeatable
+  --with-dependencies         Recursively include local workspace dependencies
+  --with-dependents           Recursively include local workspace dependents
+  --[no-]root-files           Include or exclude configured root-shared files
+  --[no-]monorepo             Force-enable or disable workspace discovery
+
+Workspace discovery reads package.json workspaces, pnpm-workspace.yaml,
+lerna.json, and rush.json. Scoped archives keep monorepo-root-relative paths.
 
 Apply options:
   --dry-run                   Validate and preview without writing
@@ -84,6 +97,9 @@ Metadata generation:
 Examples:
   package zip
   package zip ./my-project --output release.zip
+  package workspaces
+  package zip --workspace @acme/api --with-dependencies
+  package zip --all-workspaces --no-root-files
   package shift base.zip --output update.zip
   package metadata base.zip --message "Prepared update"
   package diff update.zip

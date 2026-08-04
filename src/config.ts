@@ -42,6 +42,37 @@ export const defaultConfig: PackageConfig = {
   deletePackageOnApply: false,
   deleteSourcePackageOnApply: false,
   saveDeletedCache: true,
+  monorepo: {
+    mode: 'auto',
+    workspacePatterns: [],
+    selection: [],
+    includeDependencies: false,
+    includeDependents: false,
+    includeRootFiles: true,
+    shared: [
+      'package.json',
+      'package-lock.json',
+      'npm-shrinkwrap.json',
+      'pnpm-lock.yaml',
+      'pnpm-workspace.yaml',
+      'yarn.lock',
+      'bun.lock',
+      'bun.lockb',
+      'lerna.json',
+      'rush.json',
+      'nx.json',
+      'turbo.json',
+      'tsconfig.json',
+      'tsconfig.base.json',
+      '.npmrc',
+      '.yarnrc.yml',
+      '.gitignore',
+      '.gitattributes',
+      '.editorconfig',
+      '.packagerc',
+      '.packagerc.json',
+    ],
+  },
 };
 
 function parseJson(input: string, sourceName: string): unknown {
@@ -105,6 +136,7 @@ function validateConfig(
     'deletePackageOnApply',
     'deleteSourcePackageOnApply',
     'saveDeletedCache',
+    'monorepo',
   ]);
 
   for (const key of Object.keys(config)) {
@@ -298,6 +330,73 @@ function validateConfig(
       );
     }
   }
+
+  if (config.monorepo !== undefined) {
+    if (
+      !config.monorepo ||
+      typeof config.monorepo !== 'object' ||
+      Array.isArray(config.monorepo)
+    ) {
+      throw new PackageError(
+        `${sourceName}: monorepo must be an object.`,
+        'CONFIG_INVALID',
+      );
+    }
+    const monorepo = config.monorepo as Record<string, unknown>;
+    const knownMonorepoKeys = new Set([
+      'mode',
+      'workspacePatterns',
+      'selection',
+      'includeDependencies',
+      'includeDependents',
+      'includeRootFiles',
+      'shared',
+    ]);
+    for (const key of Object.keys(monorepo)) {
+      if (!knownMonorepoKeys.has(key)) {
+        throw new PackageError(
+          `${sourceName}: unknown monorepo option ${JSON.stringify(key)}.`,
+          'CONFIG_INVALID',
+        );
+      }
+    }
+    if (
+      monorepo.mode !== undefined &&
+      monorepo.mode !== 'auto' &&
+      monorepo.mode !== 'off' &&
+      monorepo.mode !== 'on'
+    ) {
+      throw new PackageError(
+        `${sourceName}: monorepo.mode must be auto, off, or on.`,
+        'CONFIG_INVALID',
+      );
+    }
+    for (const key of ['workspacePatterns', 'selection', 'shared'] as const) {
+      const value = monorepo[key];
+      if (
+        value !== undefined &&
+        (!Array.isArray(value) ||
+          !value.every((item) => typeof item === 'string' && item.length > 0))
+      ) {
+        throw new PackageError(
+          `${sourceName}: monorepo.${key} must be an array of non-empty strings.`,
+          'CONFIG_INVALID',
+        );
+      }
+    }
+    for (const key of [
+      'includeDependencies',
+      'includeDependents',
+      'includeRootFiles',
+    ] as const) {
+      if (monorepo[key] !== undefined && typeof monorepo[key] !== 'boolean') {
+        throw new PackageError(
+          `${sourceName}: monorepo.${key} must be a boolean.`,
+          'CONFIG_INVALID',
+        );
+      }
+    }
+  }
   return config as Partial<PackageConfig>;
 }
 
@@ -312,7 +411,17 @@ export async function loadConfig(
     try {
       const raw = await readFile(candidate, 'utf8');
       const parsed = validateConfig(parseJson(raw, candidate), candidate);
-      return { config: { ...defaultConfig, ...parsed }, configPath: candidate };
+      return {
+        config: {
+          ...defaultConfig,
+          ...parsed,
+          monorepo: {
+            ...defaultConfig.monorepo,
+            ...(parsed.monorepo ?? {}),
+          },
+        },
+        configPath: candidate,
+      };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
       throw error;

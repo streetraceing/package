@@ -17,6 +17,7 @@ import {
   section,
   success,
   symbol,
+  statusPrefix,
 } from '../util/terminal.js';
 
 function requireSelector(value: string | undefined, action: string): string {
@@ -68,7 +69,7 @@ export async function backupCommand(
     );
     if (versions.length === 0) {
       console.log(
-        `${color.blue(symbol.info)} ${color.gray('No backup versions found for this project.')}`,
+        `${statusPrefix('info')} ${color.gray('No backup versions found for this project.')}`,
       );
       console.log(color.muted(divider(44)));
       return;

@@ -47,7 +47,9 @@
     "diff",
     "patch",
     "gitignore",
-    "typescript"
+    "typescript",
+    "monorepo",
+    "workspace"
   ],
   "devDependencies": {
     "@types/node": "^22.15.0",

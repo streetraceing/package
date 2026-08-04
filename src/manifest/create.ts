@@ -7,7 +7,9 @@ import type {
   ManifestFile,
   PackageConfig,
   PackageManifest,
+  WorkspaceScope,
 } from '../types.js';
+import { manifestMonorepo } from '../workspaces/discover.js';
 
 export async function createManifest(
   files: CollectedFile[],
@@ -15,6 +17,7 @@ export async function createManifest(
   kind: PackageManifest['kind'] = 'snapshot',
   baseRootHash?: string,
   baseFiles?: ManifestFile[],
+  workspaceScope?: WorkspaceScope,
 ): Promise<{ manifest: PackageManifest; data: Map<string, Buffer> }> {
   const manifestFiles: ManifestFile[] = [];
   const data = new Map<string, Buffer>();
@@ -40,6 +43,9 @@ export async function createManifest(
     rootHash,
     ...(baseRootHash ? { baseRootHash } : {}),
     ...(baseFiles ? { baseFiles } : {}),
+    ...(manifestMonorepo(workspaceScope)
+      ? { monorepo: manifestMonorepo(workspaceScope) }
+      : {}),
     config: {
       strategy: config.strategy,
       gitignore: config.gitignore,

@@ -107,7 +107,7 @@ export async function runPackageHooks(
     );
     if (!context.quiet)
       console.log(
-        `${color.magenta(symbol.hook)} ${label(hook)} ${color.bold(resolvedScript)} ${color.muted(`${symbol.arrow} ${context.command}`)}`,
+        `${color.muted(symbol.branch)} ${color.magenta(symbol.hook)} ${label(hook)} ${color.bold(resolvedScript)} ${color.muted(`${symbol.arrow} ${context.command}`)}`,
       );
     try {
       await runHookScript(script, hook, context);

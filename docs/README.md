@@ -6,12 +6,14 @@ of a project.
 
 ## Recent updates
 
+- Monorepo layouts are auto-detected and can be scoped by workspace name, path,
+  glob, local dependencies, and local dependents.
 - `forceInclude` and `forceIgnore` can override ordinary file-selection and
   ignore rules without weakening Package's internal safety exclusions.
 - Lifecycle hooks now support npm by default or another package manager/build
   runner through `packageManager`, `{packageManager}`, and `PACKAGE_MANAGER`.
-- Operational output uses a consistent tree layout built from `┌─`, `├─`, `└─`,
-  and `┞─` symbols.
+- Operational output now keeps every tree connector neutral and uses compact
+  semantic status/change glyphs beside `├─` rows.
 
 ## Guides
 
@@ -65,6 +67,34 @@ not bypass it. For an intentional automated cross-project apply, review with
 `--dry-run` and pass `--allow-project-mismatch` explicitly.
 
 Run `npx @streetraceing/package --help` for the complete command reference.
+
+## Monorepo workflow
+
+Discovery supports `package.json#workspaces`, `pnpm-workspace.yaml`, `lerna.json`,
+and `rush.json`. This covers npm, pnpm, Yarn, Bun, Lerna, and Rush layouts,
+including Nx and Turbo repositories that declare package-manager workspaces.
+
+```bash
+package workspaces
+package zip -w @acme/api --with-dependencies
+package zip -w packages/ui --with-dependents
+package zip --all-workspaces --no-root-files
+```
+
+Selectors accept package names, root-relative paths, basenames, and globs. Local
+dependency and dependent expansion is recursive. Scoped payload paths remain
+relative to the monorepo root, and a configurable `monorepo.shared` allowlist can
+include root lockfiles and shared configuration.
+
+The manifest records the workspace scope. `shift` and `metadata` inherit the
+base scope automatically and preserve deleted workspaces in comparison, while an
+explicit scope mismatch fails with `WORKSPACE_SCOPE_MISMATCH`. This prevents an
+update for one workspace from silently becoming a patch for another.
+
+Use `monorepo.mode: "on"` to force common-directory discovery, `"off"` to disable
+it, `monorepo.workspacePatterns` for custom/negated directory globs, and
+`monorepo.selection` for a persistent scope. The complete shape and defaults are
+in [the configuration schema](./schema.json).
 
 ## File-selection priorities
 
@@ -133,11 +163,11 @@ Use `--no-save-deleted-cache` for one command or set `saveDeletedCache` to `fals
 to disable the feature.
 
 Interactive output separates reference text from operational status. Help output
-is intentionally white-and-gray only. Operational output uses a consistent tree:
-`┌─` starts a section, `├─` and `└─` list details, and `┞─` marks warnings and
-changes. Semantic colors distinguish success/additions, information/modifications,
-structural operations, cautions, and removals or errors. Redirected
-output stays plain; `NO_COLOR=1` disables colors explicitly.
+is intentionally white-and-gray only. Operational sections start with `┌─`, use
+a neutral `├─` for every row, and end only at the muted `└────` divider. Semantic
+meaning belongs to the adjacent glyph (`◆`, `●`, `▲`, `×`, or a change marker),
+so connector colors stay stable from top to bottom. Redirected output stays
+plain; `NO_COLOR=1` disables colors explicitly.
 
 ## Backup versions
 

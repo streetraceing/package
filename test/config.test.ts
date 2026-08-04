@@ -48,6 +48,7 @@ test('package init creates a schema-enabled .packagerc', async () => {
     assert.equal(parsed.deletePackageOnApply, false);
     assert.equal(parsed.deleteSourcePackageOnApply, false);
     assert.equal(parsed.saveDeletedCache, true);
+    assert.deepEqual(parsed.monorepo, defaultConfig.monorepo);
 
     const loaded = await loadConfig(workspace);
     assert.equal(loaded.config.$schema, configSchemaUrl);
@@ -142,6 +143,27 @@ test('parses force-selection and package-manager CLI overrides', () => {
   assert.equal(args.configOverrides.packageManager, 'pnpm');
   assert.equal(args.configOverrides.packageManagerIgnore, true);
   assert.equal(args.configOverrides.packageManagerIgnoreFile, '.publishignore');
+});
+
+test('parses monorepo workspace selection and graph expansion flags', () => {
+  const args = parseArgs([
+    'zip',
+    '--workspace',
+    '@acme/api',
+    '--workspace=apps/web',
+    '--workspace-pattern',
+    'services/*',
+    '--with-dependencies',
+    '--with-dependents',
+    '--no-root-files',
+    '--monorepo',
+  ]);
+  assert.deepEqual(args.workspaceSelectors, ['@acme/api', 'apps/web']);
+  assert.deepEqual(args.monorepoOverrides.workspacePatterns, ['services/*']);
+  assert.equal(args.monorepoOverrides.includeDependencies, true);
+  assert.equal(args.monorepoOverrides.includeDependents, true);
+  assert.equal(args.monorepoOverrides.includeRootFiles, false);
+  assert.equal(args.monorepoOverrides.mode, 'on');
 });
 
 test('configuration rejects options not declared by the schema', async () => {

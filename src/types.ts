@@ -2,6 +2,38 @@ export type ArchiveType = 'zip';
 export type CollectionStrategy = 'git' | 'walk';
 export type ConflictStrategy = 'abort' | 'overwrite' | 'skip';
 export type SensitiveFilesMode = 'warn' | 'error' | 'allow';
+export type MonorepoMode = 'auto' | 'off' | 'on';
+
+export interface MonorepoConfig {
+  mode: MonorepoMode;
+  workspacePatterns: string[];
+  selection: string[];
+  includeDependencies: boolean;
+  includeDependents: boolean;
+  includeRootFiles: boolean;
+  shared: string[];
+}
+
+export interface WorkspacePackage {
+  name: string;
+  path: string;
+  version?: string;
+  private: boolean;
+  dependencies: string[];
+}
+
+export interface WorkspaceScope {
+  patterns: string[];
+  sources: string[];
+  workspaces: WorkspacePackage[];
+  includeRootFiles: boolean;
+}
+
+export interface ManifestMonorepo {
+  root: '.';
+  workspaces: Array<Pick<WorkspacePackage, 'name' | 'path'>>;
+  includeRootFiles: boolean;
+}
 
 export interface PackageConfig {
   $schema?: string;
@@ -40,6 +72,7 @@ export interface PackageConfig {
   deletePackageOnApply: boolean;
   deleteSourcePackageOnApply: boolean;
   saveDeletedCache: boolean;
+  monorepo: MonorepoConfig;
 }
 
 export interface ManifestFile {
@@ -64,6 +97,7 @@ export interface PackageManifest {
   baseRootHash?: string;
   baseFiles?: ManifestFile[];
   sourcePackage?: SourcePackageReference;
+  monorepo?: ManifestMonorepo;
   config: Pick<PackageConfig, 'strategy' | 'gitignore' | 'npmignore' | 'dot'>;
   files: ManifestFile[];
 }

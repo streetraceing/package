@@ -1,4 +1,8 @@
-import type { ConflictStrategy, PackageConfig } from '../types.js';
+import type {
+  ConflictStrategy,
+  MonorepoConfig,
+  PackageConfig,
+} from '../types.js';
 import { PackageError } from '../errors.js';
 
 export interface ParsedArgs {
@@ -21,6 +25,9 @@ export interface ParsedArgs {
   message?: string;
   conflictStrategy?: ConflictStrategy;
   configOverrides: Partial<PackageConfig>;
+  workspaceSelectors: string[];
+  allWorkspaces: boolean;
+  monorepoOverrides: Partial<MonorepoConfig>;
 }
 
 const commands = new Set([
@@ -37,6 +44,7 @@ const commands = new Set([
   'backup',
   'metadata',
   'meta',
+  'workspaces',
 ]);
 
 function takeValue(
@@ -67,6 +75,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
     rewriteAll: false,
     quiet: false,
     configOverrides: {},
+    workspaceSelectors: [],
+    allWorkspaces: false,
+    monorepoOverrides: {},
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -104,6 +115,21 @@ export function parseArgs(argv: string[]): ParsedArgs {
       parsed.saveDeletedCache = false;
       parsed.configOverrides.saveDeletedCache = false;
     } else if (arg === '--quiet' || arg === '-q') parsed.quiet = true;
+    else if (arg === '--all-workspaces') parsed.allWorkspaces = true;
+    else if (arg === '--with-dependencies')
+      parsed.monorepoOverrides.includeDependencies = true;
+    else if (arg === '--without-dependencies')
+      parsed.monorepoOverrides.includeDependencies = false;
+    else if (arg === '--with-dependents')
+      parsed.monorepoOverrides.includeDependents = true;
+    else if (arg === '--without-dependents')
+      parsed.monorepoOverrides.includeDependents = false;
+    else if (arg === '--root-files')
+      parsed.monorepoOverrides.includeRootFiles = true;
+    else if (arg === '--no-root-files')
+      parsed.monorepoOverrides.includeRootFiles = false;
+    else if (arg === '--monorepo') parsed.monorepoOverrides.mode = 'on';
+    else if (arg === '--no-monorepo') parsed.monorepoOverrides.mode = 'off';
     else if (arg === '--gitignore') parsed.configOverrides.gitignore = true;
     else if (arg === '--no-gitignore') parsed.configOverrides.gitignore = false;
     else if (arg === '--npmignore') parsed.configOverrides.npmignore = true;
@@ -118,7 +144,18 @@ export function parseArgs(argv: string[]): ParsedArgs {
       parsed.configOverrides.followSymlinks = true;
     else if (arg === '--no-follow-symlinks')
       parsed.configOverrides.followSymlinks = false;
-    else if (arg.startsWith('--cwd')) {
+    else if (arg.startsWith('--workspace-pattern')) {
+      const result = takeValue(argv, index, '--workspace-pattern');
+      parsed.monorepoOverrides.workspacePatterns = [
+        ...(parsed.monorepoOverrides.workspacePatterns ?? []),
+        result.value,
+      ];
+      index = result.next;
+    } else if (arg.startsWith('--workspace') || arg === '-w') {
+      const result = takeValue(argv, index, '--workspace');
+      parsed.workspaceSelectors.push(result.value);
+      index = result.next;
+    } else if (arg.startsWith('--cwd')) {
       const result = takeValue(argv, index, '--cwd');
       parsed.cwd = result.value;
       index = result.next;

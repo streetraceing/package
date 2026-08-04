@@ -17,6 +17,7 @@ import {
   section,
   success,
   symbol,
+  statusPrefix,
   warning,
 } from '../util/terminal.js';
 
@@ -71,6 +72,22 @@ export async function inspectCommand(
   console.log(
     `${color.muted(symbol.branch)} ${label('Root')} ${color.cyan(pkg.manifest.rootHash)}`,
   );
+  if (pkg.manifest.monorepo) {
+    console.log(
+      `${color.muted(symbol.branch)} ${label('Workspace scope')} ${color.magenta(
+        pkg.manifest.monorepo.workspaces
+          .map((workspace) => `${workspace.name} (${workspace.path})`)
+          .join(', '),
+      )}`,
+    );
+    console.log(
+      `${color.muted(symbol.branch)} ${label('Root shared files')} ${
+        pkg.manifest.monorepo.includeRootFiles
+          ? color.green('included')
+          : color.yellow('excluded')
+      }`,
+    );
+  }
   if (pkg.manifest.baseRootHash)
     console.log(
       `${color.muted(symbol.branch)} ${label('Base')} ${color.cyan(pkg.manifest.baseRootHash)}`,
@@ -96,22 +113,22 @@ export async function checkCommand(
   const fileWord = pkg.manifest.files.length === 1 ? 'file' : 'files';
   if (pkg.manifestSource === 'generated') {
     console.log(
-      `${color.blue(symbol.info)} ${color.light(`No manifest found; validated as a .packageshift archive with ${pkg.manifest.files.length} payload ${fileWord}.`)}`,
+      `${statusPrefix('info')} ${color.light(`No manifest found; validated as a .packageshift archive with ${pkg.manifest.files.length} payload ${fileWord}.`)}`,
     );
   } else if (pkg.manifestSource === 'legacy') {
     console.log(
-      `${color.green(symbol.success)} ${color.light(`${pkg.manifest.files.length} payload ${fileWord} verified using legacy .packagemanifest metadata`)}`,
+      `${statusPrefix('success')} ${color.light(`${pkg.manifest.files.length} payload ${fileWord} verified using legacy .packagemanifest metadata`)}`,
     );
   } else {
     console.log(
-      `${color.green(symbol.success)} ${color.light(`${pkg.manifest.files.length} payload ${fileWord} verified`)}`,
+      `${statusPrefix('success')} ${color.light(`${pkg.manifest.files.length} payload ${fileWord} verified`)}`,
     );
   }
   if (pkg.shift) {
     const instructionWord =
       pkg.shift.instructions.length === 1 ? 'instruction' : 'instructions';
     console.log(
-      `${color.magenta(symbol.success)} ${color.light(`${pkg.shift.instructions.length} .packageshift ${instructionWord} parsed`)}`,
+      `${statusPrefix('success')} ${color.light(`${pkg.shift.instructions.length} .packageshift ${instructionWord} parsed`)}`,
     );
   }
   if (pkg.ignoredPayloadMetadataPaths.length > 0)

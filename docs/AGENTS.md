@@ -369,6 +369,42 @@ Always excluded from ordinary source payload are Git metadata, dependencies,
 backup/cache directories, generated package metadata, and the output archive
 itself.
 
+### Monorepo-scoped snapshots and patches
+
+Before packaging a monorepo, inspect discovery and resolve the intended scope:
+
+```bash
+package workspaces
+package workspaces @scope/api --json
+```
+
+Create a scoped snapshot by package name, root-relative workspace path, basename,
+or glob. Add local graph expansion only when the requested deliverable needs it:
+
+```bash
+package zip --workspace @scope/api --with-dependencies
+package zip -w apps/web -w packages/ui
+package zip --all-workspaces --no-root-files
+```
+
+Workspace payload paths always remain relative to the monorepo root. Do not move
+selected files to an artificial workspace-only root. Root lockfiles and shared
+configuration are controlled by `monorepo.shared` and `includeRootFiles`.
+
+The snapshot manifest stores `monorepo.root`, selected workspace names/paths, and
+the root-file policy. When creating metadata or a patch, do not restate or change
+the scope unless the user explicitly asks for a new base snapshot:
+
+```bash
+package shift scoped-base.zip --output scoped-update.zip
+package metadata scoped-base.zip
+```
+
+These commands inherit the base scope, continue tracking a workspace that was
+removed from the current checkout, and reject a conflicting explicit selection
+with `WORKSPACE_SCOPE_MISMATCH`. This guard is intentional: changing scope in the
+middle of a patch chain can misclassify unselected files as additions/removals.
+
 ### Create a patch from a snapshot
 
 After changing the project:

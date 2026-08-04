@@ -6,7 +6,7 @@ import type {
   PackageManifest,
   ShiftInstruction,
 } from '../types.js';
-import { collectFiles } from '../files/collect.js';
+import { collectProjectFiles } from '../files/collect.js';
 import { createManifest } from '../manifest/create.js';
 import { loadManifestFile, loadPackage } from '../manifest/load.js';
 import { calculateShift } from '../shift/calculate.js';
@@ -31,6 +31,10 @@ import {
   symbol,
   warning,
 } from '../util/terminal.js';
+import {
+  resolveWorkspaceScope,
+  workspaceScopeMatchesManifest,
+} from '../workspaces/discover.js';
 
 export interface MetadataCommandOptions {
   message?: string;
@@ -119,9 +123,34 @@ export async function metadataCommand(
   const baseline = await loadBaseline(baseSource, config);
   if (baseline) assertSnapshotBaseline(baseline);
 
+  const workspaceScope = await resolveWorkspaceScope(
+    config,
+    baseline?.manifest.monorepo,
+  );
+  if (
+    baseline &&
+    !workspaceScopeMatchesManifest(workspaceScope, baseline.manifest.monorepo)
+  ) {
+    throw new PackageError(
+      'Workspace selection does not match the metadata baseline. Create a new snapshot for the requested workspace scope.',
+      'WORKSPACE_SCOPE_MISMATCH',
+    );
+  }
   const collectionConfig = configWithoutLocalBaselineArchive(config, baseline);
-  const files = await collectFiles(collectionConfig);
-  const { manifest } = await createManifest(files, config, 'snapshot');
+  const { files } = await collectProjectFiles(
+    collectionConfig,
+    undefined,
+    baseline?.manifest.monorepo,
+    workspaceScope,
+  );
+  const { manifest } = await createManifest(
+    files,
+    config,
+    'snapshot',
+    undefined,
+    undefined,
+    workspaceScope,
+  );
 
   let instructions: ShiftInstruction[] = [];
   let structuralOperations = 0;
@@ -180,6 +209,12 @@ export async function metadataCommand(
   console.log(
     `${color.muted(symbol.branch)} ${label('Structural operations')} ${color.magenta(String(structuralOperations))}`,
   );
+  if (workspaceScope)
+    console.log(
+      `${color.muted(symbol.branch)} ${label('Workspaces')} ${color.magenta(
+        workspaceScope.workspaces.map((workspace) => workspace.name).join(', '),
+      )}`,
+    );
   if (baseline)
     console.log(
       `${color.muted(symbol.lastBranch)} ${label('Base')} ${color.cyan(baseline.manifest.rootHash)}`,

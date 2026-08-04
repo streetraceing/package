@@ -12,6 +12,7 @@ import type {
 import { readZip } from '../archive/zip.js';
 import { parseShift } from '../shift/parser.js';
 import { sha256Buffer, stableJson } from '../util/hash.js';
+import { normalizeRelativePath } from '../util/path.js';
 import {
   legacyPackageManifestPath,
   packageManifestPath,
@@ -57,6 +58,53 @@ export function validateManifest(
       'MANIFEST_INVALID',
     );
   }
+  if (manifest.monorepo !== undefined) {
+    const monorepo = manifest.monorepo;
+    if (
+      !monorepo ||
+      typeof monorepo !== 'object' ||
+      monorepo.root !== '.' ||
+      typeof monorepo.includeRootFiles !== 'boolean' ||
+      !Array.isArray(monorepo.workspaces)
+    ) {
+      throw new PackageError(
+        `${sourcePath} contains invalid monorepo metadata.`,
+        'MANIFEST_INVALID',
+      );
+    }
+    const paths = new Set<string>();
+    for (const workspace of monorepo.workspaces) {
+      if (
+        !workspace ||
+        typeof workspace.name !== 'string' ||
+        workspace.name.length === 0 ||
+        typeof workspace.path !== 'string' ||
+        workspace.path.length === 0
+      ) {
+        throw new PackageError(
+          `${sourcePath} contains an invalid monorepo workspace.`,
+          'MANIFEST_INVALID',
+        );
+      }
+      let normalized: string;
+      try {
+        normalized = normalizeRelativePath(workspace.path);
+      } catch {
+        throw new PackageError(
+          `${sourcePath} contains an unsafe monorepo workspace path.`,
+          'MANIFEST_INVALID',
+        );
+      }
+      if (normalized !== workspace.path || paths.has(normalized)) {
+        throw new PackageError(
+          `${sourcePath} contains duplicate or non-normalized monorepo workspace paths.`,
+          'MANIFEST_INVALID',
+        );
+      }
+      paths.add(normalized);
+    }
+  }
+
   if (manifest.sourcePackage !== undefined) {
     const source = manifest.sourcePackage;
     if (

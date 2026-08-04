@@ -1,6 +1,7 @@
 import { stderr, stdout } from 'node:process';
 
 type OutputStream = 'stdout' | 'stderr';
+export type StatusKind = 'success' | 'info' | 'warning' | 'error';
 
 const ansi = {
   reset: '\u001b[0m',
@@ -19,23 +20,30 @@ const ansi = {
   magenta: '\u001b[38;5;177m',
 } as const;
 
+/**
+ * Tree connectors are deliberately neutral. Semantic color belongs to the
+ * one-cell glyph after the connector, so a section never changes connector
+ * color halfway through its tree.
+ */
 export const symbol = {
-  success: '└─',
-  info: '├─',
-  warning: '┞─',
-  error: '└─',
+  success: '◆',
+  info: '●',
+  warning: '▲',
+  error: '×',
   section: '┌',
   branch: '├─',
-  lastBranch: '└─',
-  separator: '┊',
+  // Detail rows are followed by the divider, so even the final detail is a
+  // branch. The divider is the only visual tree terminator.
+  lastBranch: '├─',
+  separator: '│',
   arrow: '→',
-  hook: '┞─',
-  add: '┞',
-  modify: '┞',
-  remove: '┞',
-  move: '┞',
-  mode: '┞',
-  conflict: '┞',
+  hook: '↳',
+  add: '+',
+  modify: '~',
+  remove: '−',
+  move: '↪',
+  mode: '◇',
+  conflict: '!',
 } as const;
 
 function colorsEnabled(stream: OutputStream): boolean {
@@ -98,22 +106,59 @@ export function divider(width = 44): string {
   return color.muted(`└${'─'.repeat(Math.max(1, width - 1))}`);
 }
 
+function statusGlyph(kind: StatusKind, stream: OutputStream): string {
+  if (kind === 'success') return decorate(symbol.success, ansi.green, stream);
+  if (kind === 'info') return decorate(symbol.info, ansi.cyan, stream);
+  if (kind === 'warning') return decorate(symbol.warning, ansi.yellow, stream);
+  return decorate(symbol.error, ansi.red, stream);
+}
+
+export function statusPrefix(
+  kind: StatusKind,
+  stream: OutputStream = 'stdout',
+): string {
+  return `${decorate(symbol.branch, ansi.muted, stream)} ${statusGlyph(kind, stream)}`;
+}
+
+export function statusLine(
+  kind: StatusKind,
+  message: string,
+  stream: OutputStream = 'stdout',
+): string {
+  const text =
+    kind === 'error'
+      ? decorate(message, ansi.red, stream)
+      : decorate(message, ansi.light, stream);
+  return `${statusPrefix(kind, stream)} ${text}`;
+}
+
 export function success(message: string): void {
-  console.log(`${color.positive(symbol.success)} ${color.light(message)}`);
+  console.log(statusLine('success', message));
 }
 
 export function info(message: string): void {
-  console.log(`${color.cyan(symbol.info)} ${color.light(message)}`);
+  console.log(statusLine('info', message));
 }
 
 export function warning(message: string): void {
+  const lines = message.split(/\r?\n/);
+  const first = lines.shift() ?? '';
+  const branch = decorate(symbol.branch, ansi.muted, 'stderr');
   console.warn(
-    `${color.warningBold(`${symbol.warning} Warning`)} ${color.muted(symbol.separator)} ${message}`,
+    `${branch} ${statusGlyph('warning', 'stderr')} ${color.warningBold('Warning')} ` +
+      `${decorate(symbol.separator, ansi.muted, 'stderr')} ${decorate(first, ansi.light, 'stderr')}`,
   );
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    console.warn(
+      `${branch} ${decorate('·', ansi.yellow, 'stderr')} ${decorate(line.trim(), ansi.light, 'stderr')}`,
+    );
+  }
 }
 
 export function errorMessage(message: string): string {
-  return `${color.error(`${symbol.error} package`)}${color.error(':')} ${message}`;
+  const branch = decorate(symbol.branch, ansi.muted, 'stderr');
+  return `${branch} ${statusGlyph('error', 'stderr')} ${color.error('package')}${color.error(':')} ${color.error(message)}`;
 }
 
 export function formatBytes(bytes: number): string {

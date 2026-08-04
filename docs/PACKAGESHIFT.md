@@ -59,6 +59,17 @@ Paths are always relative to the selected project root:
 src/api/client.ts
 ```
 
+For a workspace-scoped monorepo archive, the selected project root is still the
+monorepo root. A file in the API workspace therefore remains:
+
+```text
+apps/api/src/client.ts
+```
+
+The workspace scope is stored in `.packagemanifest.json`, not repeated in the
+instruction language. Generated `shift` and `metadata` operations inherit the
+base manifest scope and reject a different explicit scope.
+
 Use forward slashes on every operating system. Absolute paths, drive-letter paths, NUL bytes, and paths containing `..` are rejected.
 
 `.packageshift`, `.packagemanifest.json`, and `.packagemanifest` are reserved

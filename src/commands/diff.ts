@@ -10,6 +10,7 @@ import {
   label,
   section,
   symbol,
+  statusPrefix,
   warning,
 } from '../util/terminal.js';
 
@@ -24,26 +25,30 @@ function countLabel(kind: string, count: number): string {
 export function formatChanges(changes: ProjectChange[]): string {
   const visible = changes.filter((change) => change.kind !== 'UNCHANGED');
   if (visible.length === 0)
-    return `${color.positive(symbol.success)} ${color.green('No changes detected.')}`;
+    return `${statusPrefix('success')} ${color.green('No changes detected.')}`;
 
   const lines: string[] = [];
   for (const change of visible) {
     const marker = changeSymbol(change.kind);
     const kind = colorChangeKind(change.kind, change.kind.padEnd(8));
     if (change.kind === 'MOVE' || change.kind === 'COPY') {
-      lines.push(`  ${marker} ${kind} ${color.light(change.path)}`);
       lines.push(
-        `    ${color.muted(symbol.lastBranch)} ${color.magenta(symbol.arrow)} ${color.light(change.destination ?? '')}`,
+        `${color.muted(symbol.branch)} ${marker} ${kind} ${color.light(change.path)}`,
+      );
+      lines.push(
+        `${color.muted('│ ')} ${color.muted(symbol.branch)} ${color.magenta(symbol.arrow)} ${color.light(change.destination ?? '')}`,
       );
     } else if (change.kind === 'MODE') {
       lines.push(
-        `  ${marker} ${kind} ${color.light(change.path)} ${color.muted(octal(change.beforeMode))} ${color.yellow(symbol.arrow)} ${color.yellow(octal(change.afterMode))}`,
+        `${color.muted(symbol.branch)} ${marker} ${kind} ${color.light(change.path)} ${color.muted(octal(change.beforeMode))} ${color.yellow(symbol.arrow)} ${color.yellow(octal(change.afterMode))}`,
       );
     } else {
       const detail = change.detail
         ? ` ${color.muted(`(${change.detail})`)}`
         : '';
-      lines.push(`  ${marker} ${kind} ${color.light(change.path)}${detail}`);
+      lines.push(
+        `${color.muted(symbol.branch)} ${marker} ${kind} ${color.light(change.path)}${detail}`,
+      );
     }
   }
 
@@ -51,15 +56,14 @@ export function formatChanges(changes: ProjectChange[]): string {
   for (const change of visible)
     counts.set(change.kind, (counts.get(change.kind) ?? 0) + 1);
 
-  lines.push('');
-  lines.push(`  ${divider(42)}`);
   lines.push(
-    `  ${color.accent(`${visible.length} change${visible.length === 1 ? '' : 's'}`)} ${color.muted(symbol.separator)} ${[
+    `${color.muted(symbol.branch)} ${color.accent(`${visible.length} change${visible.length === 1 ? '' : 's'}`)} ${color.muted(symbol.separator)} ${[
       ...counts.entries(),
     ]
       .map(([kind, count]) => countLabel(kind, count))
       .join(color.muted(`  ${symbol.separator}  `))}`,
   );
+  lines.push(divider(42));
   return lines.join('\n');
 }
 
@@ -110,15 +114,15 @@ export async function diffCommand(
       );
     if (pkg.manifestSource === 'generated')
       console.log(
-        `${color.yellow(symbol.warning)} ${label('Safety')} ${color.yellow('no embedded manifest; base verification unavailable')}`,
+        `${statusPrefix('warning')} ${label('Safety')} ${color.yellow('no embedded manifest; base verification unavailable')}`,
       );
     if (result.baseMatches === false)
       console.log(
-        `${color.red(symbol.error)} ${label('Base')} ${color.red('mismatch')} ${color.muted('(apply requires --force)')}`,
+        `${statusPrefix('error')} ${label('Base')} ${color.red('mismatch')} ${color.muted('(apply requires --force)')}`,
       );
     else if (result.baseMatches === true)
       console.log(
-        `${color.green(symbol.success)} ${label('Base')} ${color.green('matches')}`,
+        `${statusPrefix('success')} ${label('Base')} ${color.green('matches')}`,
       );
     console.log('');
     section('Changes');

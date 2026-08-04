@@ -10,6 +10,7 @@ import {
   label,
   section,
   symbol,
+  statusPrefix,
   warning,
 } from '../util/terminal.js';
 import { packagePayloadFiles } from '../archive/metadata.js';
@@ -170,8 +171,7 @@ function printMismatch(mismatch: ProjectMismatch): void {
       `${color.muted(symbol.lastBranch)} ${label('Target package')} ${color.cyan(mismatch.targetPackageName)}`,
     );
   for (const reason of mismatch.reasons)
-    console.log(`${color.yellow(symbol.warning)} ${color.yellow(reason)}`);
-  console.log(color.muted(divider(44)));
+    console.log(`${statusPrefix('warning')} ${color.yellow(reason)}`);
 }
 
 export async function confirmProjectMismatch(
@@ -185,21 +185,25 @@ export async function confirmProjectMismatch(
     warning(
       'dry-run will continue without writing files. A real apply will require explicit confirmation.',
     );
+    console.log(color.muted(divider(44)));
     return;
   }
 
   if (options.allowProjectMismatch) {
     warning('project mismatch was explicitly allowed by the command line.');
+    console.log(color.muted(divider(44)));
     return;
   }
 
   if (options.yes || !process.stdin.isTTY || !process.stdout.isTTY) {
+    console.log(color.muted(divider(44)));
     throw new PackageError(
       'Refusing to apply an archive that appears to target another project. Review with --dry-run and pass --allow-project-mismatch only when intentional.',
       'PROJECT_MISMATCH',
     );
   }
 
+  console.log(color.muted(divider(44)));
   const readline = createInterface({ input, output });
   try {
     const answer = await readline.question(

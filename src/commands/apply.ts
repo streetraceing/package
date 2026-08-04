@@ -22,6 +22,7 @@ import {
   section,
   success,
   symbol,
+  statusPrefix,
   warning,
 } from '../util/terminal.js';
 import { packagePayloadFiles } from '../archive/metadata.js';
@@ -134,7 +135,7 @@ function printPackageMetadata(pkg: LoadedPackage, context: ApplyContext): void {
     );
   } else if (pkg.manifestSource === 'legacy') {
     console.log(
-      `${color.blue(symbol.info)} ${label('Manifest')} ${color.blue('legacy .packagemanifest')}`,
+      `${statusPrefix('info')} ${label('Manifest')} ${color.blue('legacy .packagemanifest')}`,
     );
   }
   if (pkg.ignoredPayloadMetadataPaths.length > 0) {
@@ -153,7 +154,7 @@ function printApplyPolicies(options: ApplyOptions): void {
   if (options.dryRun) policies.push(color.blue('mode: dry run'));
   if (policies.length > 0)
     console.log(
-      `${color.cyan(symbol.info)} ${label('Policies')} ${policies.join(color.muted(`  ${symbol.separator}  `))}`,
+      `${statusPrefix('info')} ${label('Policies')} ${policies.join(color.muted(`  ${symbol.separator}  `))}`,
     );
 }
 
@@ -168,7 +169,7 @@ function printRewriteExpansion(
   ).length;
   if (unchangedPayloadFiles > 0)
     console.log(
-      `${color.magenta(symbol.info)} ${label('Rewrite expansion')} ${color.magenta(String(unchangedPayloadFiles))} unchanged ` +
+      `${statusPrefix('info')} ${label('Rewrite expansion')} ${color.magenta(String(unchangedPayloadFiles))} unchanged ` +
         `payload file${unchangedPayloadFiles === 1 ? '' : 's'} will also be written`,
     );
 }
@@ -222,9 +223,6 @@ export async function applyCommand(
 
   printPackageMetadata(pkg, context);
   printApplyPolicies(options);
-  console.log('');
-  section('Changes');
-  console.log(formatChanges(comparison.changes));
   printRewriteExpansion(
     pkg,
     options,
@@ -234,6 +232,10 @@ export async function applyCommand(
         .map((change) => change.path),
     ),
   );
+  console.log(color.muted(divider(44)));
+  console.log('');
+  section('Changes');
+  console.log(formatChanges(comparison.changes));
   console.log('');
   await confirmProjectMismatch(projectMismatch, options);
   if (projectMismatch && !options.dryRun) console.log('');
@@ -250,7 +252,7 @@ export async function applyCommand(
   section(options.dryRun ? 'Dry-run result' : 'Apply result');
   if (options.dryRun) {
     console.log(
-      `${color.blue(symbol.info)} ${color.blue('No files were written.')} ${color.light(
+      `${statusPrefix('info')} ${color.blue('No files were written.')} ${color.light(
         `${applySummary(
           result.changedPaths,
           result.writtenFiles,
@@ -271,18 +273,17 @@ export async function applyCommand(
       );
     if (result.backupPath)
       console.log(
-        `${color.green(symbol.branch)} ${label('Backup')} ${color.light(result.backupPath)}`,
+        `${color.muted(symbol.branch)} ${color.green(symbol.success)} ${label('Backup')} ${color.light(result.backupPath)}`,
       );
   }
   if (result.overwrittenConflicts.length > 0)
     console.log(
-      `${color.orange(symbol.branch)} ${label('Overwritten conflicts')} ${color.orange(result.overwrittenConflicts.join(', '))}`,
+      `${color.muted(symbol.branch)} ${color.orange(symbol.conflict)} ${label('Overwritten conflicts')} ${color.orange(result.overwrittenConflicts.join(', '))}`,
     );
   if (result.skippedPaths.length > 0)
     console.log(
-      `${color.yellow(symbol.branch)} ${label('Skipped conflicts')} ${color.yellow(result.skippedPaths.join(', '))}`,
+      `${color.muted(symbol.branch)} ${color.yellow(symbol.warning)} ${label('Skipped conflicts')} ${color.yellow(result.skippedPaths.join(', '))}`,
     );
-  console.log(color.muted(divider(44)));
 
   if (!options.dryRun) {
     await runPostApplyLifecycle(
@@ -293,4 +294,5 @@ export async function applyCommand(
     );
     reportDeletedCache(deletedCache);
   }
+  console.log(color.muted(divider(44)));
 }

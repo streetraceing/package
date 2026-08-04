@@ -42,7 +42,7 @@
       "type": "string",
       "default": "{folder}.zip",
       "description": "Default snapshot archive filename.",
-      "markdownDescription": "Filename used by `package zip` when `--output` is omitted.\n\n`{folder}` - Replaced with the project root folder name.\n\nExample: `{folder}-source.zip`.",
+      "markdownDescription": "Filename used by `package zip` when `--output` is omitted.\n\n`{folder}` - Replaced with the project root folder name.\n\n`{workspace}` and `{workspaces}` - Replaced with a filesystem-safe workspace label when scoped monorepo packaging is active. With the default `{folder}.zip`, a single selected workspace automatically uses `<workspace>.zip`.",
       "minLength": 1,
       "examples": ["{folder}.zip", "{folder}-source.zip"]
     },
@@ -332,6 +332,124 @@
       "description": "Save files that the CLI is about to delete or replace in the user cache.",
       "markdownDescription": "`true` - Before Package deletes or replaces a regular file, copy its current contents to the per-project deleted-file cache. The default location is `~/streetraceing/.package/cache/<project-id>/<operation-id>` on Linux and macOS and `%USERPROFILE%\\streetraceing\\.package\\cache\\<project-id>\\<operation-id>` on Windows. Each operation includes `.packagecache.json` metadata with original paths, reasons, sizes, modes, and SHA-256 values.\n\nCovered operations include project files removed or overwritten by `apply`, files replaced by `backup restore`, existing output archives replaced by `zip` or `shift`, `.packagerc` replaced by `init --force`, and archives removed by `deletePackageOnApply` or `deleteSourcePackageOnApply`. Files deleted by user-defined hook scripts cannot be intercepted.\n\nFiles larger than `10 MiB` are still cached, but the CLI prints a warning before continuing. Cache writes are performed before the destructive action; if a required cache write fails, Package does not perform that deletion or replacement.\n\n`false` - Do not create deleted-file cache copies. Versioned apply backups remain controlled separately by `backupOnApply`.\n\n`--save-deleted-cache` - Enable caching for one command.\n\n`--no-save-deleted-cache` - Disable caching for one command.",
       "examples": [true, false]
+    },
+    "monorepo": {
+      "type": "object",
+      "default": {
+        "mode": "auto",
+        "workspacePatterns": [],
+        "selection": [],
+        "includeDependencies": false,
+        "includeDependents": false,
+        "includeRootFiles": true,
+        "shared": [
+          "package.json",
+          "package-lock.json",
+          "npm-shrinkwrap.json",
+          "pnpm-lock.yaml",
+          "pnpm-workspace.yaml",
+          "yarn.lock",
+          "bun.lock",
+          "bun.lockb",
+          "lerna.json",
+          "rush.json",
+          "nx.json",
+          "turbo.json",
+          "tsconfig.json",
+          "tsconfig.base.json",
+          ".npmrc",
+          ".yarnrc.yml",
+          ".gitignore",
+          ".gitattributes",
+          ".editorconfig",
+          ".packagerc",
+          ".packagerc.json"
+        ]
+      },
+      "description": "Workspace discovery and scoped packaging for monorepositories.",
+      "markdownDescription": "Configures first-class `npm`, `pnpm`, Yarn/Bun, Lerna, and Rush workspace discovery. An empty `selection` preserves whole-repository packaging. Selectors may use a package name, relative workspace path, basename, or glob. Scoped archives keep paths relative to the monorepo root so `diff`, `shift`, and `apply` remain root-safe.",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "default": "auto",
+          "enum": ["auto", "off", "on"],
+          "description": "Workspace discovery mode.",
+          "markdownDescription": "`auto` - Enable discovery when workspace metadata exists.\n\n`on` - Also probe common directories such as `packages/*` and `apps/*`.\n\n`off` - Disable workspace selection."
+        },
+        "workspacePatterns": {
+          "type": "array",
+          "default": [],
+          "description": "Additional workspace directory globs.",
+          "markdownDescription": "Adds project-relative workspace globs such as `packages/*` or `apps/**`. Prefix a pattern with `!` to exclude matches. These patterns are combined with detected package-manager metadata.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [[], ["packages/*", "apps/*", "!apps/legacy"]]
+        },
+        "selection": {
+          "type": "array",
+          "default": [],
+          "description": "Workspace selectors used for scoped collection.",
+          "markdownDescription": "An empty array packages the whole repository for backward compatibility. Entries match workspace package names, relative paths, basenames, or globs. The CLI `--workspace` and `--all-workspaces` flags override this list.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [[], ["@acme/api"], ["apps/*"]]
+        },
+        "includeDependencies": {
+          "type": "boolean",
+          "default": false,
+          "description": "Expand selection to local workspace dependencies.",
+          "markdownDescription": "`true` - Recursively include selected workspaces' local dependencies from dependency fields.\n\n`false` - Package only directly selected workspaces. Use `--with-dependencies` for one command."
+        },
+        "includeDependents": {
+          "type": "boolean",
+          "default": false,
+          "description": "Expand selection to local workspace dependents.",
+          "markdownDescription": "`true` - Recursively include local workspaces that depend on a selected workspace.\n\n`false` - Do not expand in the reverse direction. Use `--with-dependents` for one command."
+        },
+        "includeRootFiles": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include configured shared root files in scoped archives.",
+          "markdownDescription": "`true` - Include paths matched by `monorepo.shared`, such as lockfiles and root build configuration.\n\n`false` - Include only selected workspace trees, except explicit `forceInclude` matches."
+        },
+        "shared": {
+          "type": "array",
+          "default": [
+            "package.json",
+            "package-lock.json",
+            "npm-shrinkwrap.json",
+            "pnpm-lock.yaml",
+            "pnpm-workspace.yaml",
+            "yarn.lock",
+            "bun.lock",
+            "bun.lockb",
+            "lerna.json",
+            "rush.json",
+            "nx.json",
+            "turbo.json",
+            "tsconfig.json",
+            "tsconfig.base.json",
+            ".npmrc",
+            ".yarnrc.yml",
+            ".gitignore",
+            ".gitattributes",
+            ".editorconfig",
+            ".packagerc",
+            ".packagerc.json"
+          ],
+          "description": "Root-shared files and globs included with scoped workspaces.",
+          "markdownDescription": "Project-relative globs for files needed by selected workspaces, including root `package.json`, lockfiles, workspace declarations, TypeScript/build configuration, and Package configuration. Add entries such as `scripts/**` or `.github/**` when those files are required by the scoped archive.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
     }
   },
   "examples": [
@@ -361,7 +479,38 @@
       "deterministic": true,
       "backupOnApply": true,
       "conflictStrategy": "abort",
-      "deleteSourcePackageOnApply": false
+      "deleteSourcePackageOnApply": false,
+      "monorepo": {
+        "mode": "auto",
+        "workspacePatterns": [],
+        "selection": [],
+        "includeDependencies": false,
+        "includeDependents": false,
+        "includeRootFiles": true,
+        "shared": [
+          "package.json",
+          "package-lock.json",
+          "npm-shrinkwrap.json",
+          "pnpm-lock.yaml",
+          "pnpm-workspace.yaml",
+          "yarn.lock",
+          "bun.lock",
+          "bun.lockb",
+          "lerna.json",
+          "rush.json",
+          "nx.json",
+          "turbo.json",
+          "tsconfig.json",
+          "tsconfig.base.json",
+          ".npmrc",
+          ".yarnrc.yml",
+          ".gitignore",
+          ".gitattributes",
+          ".editorconfig",
+          ".packagerc",
+          ".packagerc.json"
+        ]
+      }
     }
   ]
 }

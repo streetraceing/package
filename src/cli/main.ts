@@ -17,6 +17,7 @@ import { PackageError } from '../errors.js';
 import { backupCommand } from '../commands/backups.js';
 import { metadataCommand } from '../commands/metadata.js';
 import { colorizeHelp } from '../util/terminal.js';
+import { workspacesCommand } from '../commands/workspaces.js';
 
 async function readVersion(): Promise<string> {
   const candidates = [
@@ -67,7 +68,30 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   if (args.command === 'zip' && args.positionals[0])
     projectCwd = path.resolve(cwd, args.positionals[0]);
   const loaded = await loadConfig(projectCwd, args.configPath);
-  const merged = { ...loaded.config, ...args.configOverrides };
+  const commandWorkspaceSelectors =
+    args.command === 'workspaces'
+      ? [...args.workspaceSelectors, ...args.positionals]
+      : args.workspaceSelectors;
+  const monorepo = {
+    ...loaded.config.monorepo,
+    ...args.monorepoOverrides,
+    workspacePatterns: args.monorepoOverrides.workspacePatterns
+      ? [
+          ...loaded.config.monorepo.workspacePatterns,
+          ...args.monorepoOverrides.workspacePatterns,
+        ]
+      : loaded.config.monorepo.workspacePatterns,
+    selection: args.allWorkspaces
+      ? ['*']
+      : commandWorkspaceSelectors.length > 0
+        ? commandWorkspaceSelectors
+        : loaded.config.monorepo.selection,
+  };
+  const merged = {
+    ...loaded.config,
+    ...args.configOverrides,
+    monorepo,
+  };
   if (args.configOverrides.ignore)
     merged.ignore = [...loaded.config.ignore, ...args.configOverrides.ignore];
   if (args.configOverrides.include)
@@ -149,6 +173,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     );
   } else if (args.command === 'list') {
     await listCommand(args.positionals[0], config, args.json);
+  } else if (args.command === 'workspaces') {
+    await workspacesCommand(config, args.json);
   } else {
     throw new PackageError(`Unknown command: ${args.command}`, 'CLI_COMMAND');
   }

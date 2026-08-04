@@ -15,6 +15,8 @@ copy of a project.
 - selective apply writes only added, modified, or mode-changed files by default;
 - path, archive-integrity, base-project, and per-file conflict checks, with
   versioned backups, rollback history, recovery backups, and a deleted-file cache;
+- first-class monorepo workspace discovery, dependency-aware scoping, and safe
+  workspace patch inheritance;
 - readable colorized terminal output with automatic plain-text fallback.
 
 Requires Node.js 18 or later.
@@ -79,6 +81,79 @@ npx @streetraceing/package update.zip diff
 ```
 
 Run `npx @streetraceing/package --help` to see every command and option.
+
+## Monorepo workspaces
+
+Package automatically discovers npm, pnpm, Yarn, Bun, Lerna, and Rush-style
+workspace layouts from `package.json#workspaces`, `pnpm-workspace.yaml`,
+`lerna.json`, and `rush.json`. Use the discovery command to see exactly what the
+CLI found before creating an archive:
+
+```bash
+package workspaces
+package workspaces @acme/api
+package workspaces "apps/*" --json
+```
+
+Select a workspace by package name, project-relative directory, directory
+basename, or glob. Repeat `--workspace` to combine scopes, or use
+`--all-workspaces`:
+
+```bash
+package zip --workspace @acme/api
+package zip -w apps/web -w packages/ui
+package zip --workspace "@acme/*" --no-root-files
+package zip --all-workspaces
+```
+
+Local workspace relationships are read from `dependencies`, `devDependencies`,
+`peerDependencies`, and `optionalDependencies`. Graph expansion is recursive, so
+an application can include everything it needs or every package that consumes
+it:
+
+```bash
+package zip -w @acme/api --with-dependencies
+package zip -w @acme/ui --with-dependents
+package zip -w @acme/core --with-dependencies --with-dependents
+```
+
+Scoped archives always keep paths relative to the monorepo root. By default they
+also include root-shared files such as lockfiles, workspace declarations,
+TypeScript/Nx/Turbo configuration, and `.packagerc`; customize that allowlist
+with `monorepo.shared` or disable it with `--no-root-files`.
+
+The selected workspace paths and root-file policy are stored in
+`.packagemanifest.json`. `package shift` and `package metadata` inherit that scope
+from the base snapshot automatically, including removed workspaces, and reject an
+explicitly different scope instead of producing an unsafe partial patch. Create a
+new base snapshot when the intended scope changes.
+
+A strict configuration example:
+
+```json
+{
+  "monorepo": {
+    "mode": "auto",
+    "workspacePatterns": ["packages/*", "apps/*", "!apps/legacy"],
+    "selection": ["@acme/api"],
+    "includeDependencies": true,
+    "includeDependents": false,
+    "includeRootFiles": true,
+    "shared": [
+      "package.json",
+      "pnpm-workspace.yaml",
+      "pnpm-lock.yaml",
+      "tsconfig.base.json",
+      "turbo.json",
+      ".packagerc"
+    ]
+  }
+}
+```
+
+`mode: "auto"` enables detected layouts, `"on"` also falls back to common
+`packages/*`, `apps/*`, `services/*`, `libs/*`, and `modules/*` directories, and
+`"off"` disables workspace discovery.
 
 ## Configuration and package format
 
@@ -190,12 +265,13 @@ and total saved size. Disable this behavior globally with
 
 Terminal output uses two complementary palettes. Help and reference screens
 (`package -h`) intentionally stay in soft white and gray shades. Operational
-commands such as `zip`, `shift`, `check`, `diff`, `apply`, `metadata`, and
-`backup` use a consistent tree layout: `┌─` starts a section, `├─` and `└─` list
-details, and `┞─` marks warnings and change rows. Colors distinguish successful
-work/additions, information/modifications, structural operations, cautions, and
-removals or errors. Colors are automatically disabled for redirected output and JSON mode;
-set `NO_COLOR=1` to disable them explicitly.
+commands use one consistent tree: `┌─` starts a section, every status/detail row
+uses a neutral `├─` connector, and the muted `└────` divider is the only
+terminator. A separate one-cell semantic glyph carries status (`◆` success, `●`
+information, `▲` warning, `×` error), while change rows use `+`, `~`, `−`, `↪`,
+`◇`, or `!`. Connector color therefore never changes halfway through a tree.
+Colors are automatically disabled for redirected output and JSON mode; set
+`NO_COLOR=1` to disable them explicitly.
 
 ## Backup history
 

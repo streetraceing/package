@@ -2,7 +2,12 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { lstat, readdir, readFile, realpath } from 'node:fs/promises';
-import type { CollectedFile, PackageConfig } from '../types.js';
+import type {
+  CollectedFile,
+  ManifestMonorepo,
+  PackageConfig,
+  WorkspaceScope,
+} from '../types.js';
 import { PackageError } from '../errors.js';
 import { isDotPath, normalizeRelativePath, toPosixPath } from '../util/path.js';
 import { reservedPackageMetadataPaths } from '../archive/metadata.js';
@@ -12,6 +17,10 @@ import {
   parseIgnoreFile,
   type IgnoreRule,
 } from './ignore.js';
+import {
+  pathMatchesWorkspaceScope,
+  resolveWorkspaceScope,
+} from '../workspaces/discover.js';
 
 const execFileAsync = promisify(execFile);
 const hardIgnored = [
@@ -76,10 +85,13 @@ function passesPatterns(
   relativePath: string,
   config: PackageConfig,
   outputArchive?: string,
+  workspaceScope?: WorkspaceScope,
 ): boolean {
   if (isNeverPackaged(relativePath, config, outputArchive)) return false;
   if (matchesAny(relativePath, config.forceIgnore)) return false;
   if (matchesAny(relativePath, config.forceInclude)) return true;
+  if (!pathMatchesWorkspaceScope(relativePath, config, workspaceScope))
+    return false;
   if (!config.dot && isDotPath(relativePath)) return false;
   const included =
     config.include.length === 0 ||
@@ -160,13 +172,15 @@ async function collectForceIncludedFiles(
 async function collectWithGit(
   config: PackageConfig,
   outputArchive?: string,
+  workspaceScope?: WorkspaceScope,
 ): Promise<CollectedFile[] | undefined> {
   if (config.strategy !== 'git' || !config.gitignore) return undefined;
   const paths = await gitFiles(config.root);
   if (!paths) return undefined;
   const files: CollectedFile[] = [];
   for (const relativePath of paths.sort()) {
-    if (!passesPatterns(relativePath, config, outputArchive)) continue;
+    if (!passesPatterns(relativePath, config, outputArchive, workspaceScope))
+      continue;
     const absolutePath = path.join(config.root, ...relativePath.split('/'));
     let stat;
     try {
@@ -223,6 +237,7 @@ async function loadIgnoreRules(
 async function collectWithWalk(
   config: PackageConfig,
   outputArchive?: string,
+  workspaceScope?: WorkspaceScope,
 ): Promise<CollectedFile[]> {
   const files: CollectedFile[] = [];
 
@@ -267,7 +282,7 @@ async function collectWithWalk(
         if (stat.isDirectory()) await walk(resolved, relativePath, localRules);
         else if (
           stat.isFile() &&
-          passesPatterns(relativePath, config, outputArchive)
+          passesPatterns(relativePath, config, outputArchive, workspaceScope)
         ) {
           files.push({
             absolutePath: resolved,
@@ -281,7 +296,7 @@ async function collectWithWalk(
         await walk(absolutePath, relativePath, localRules);
       } else if (
         entry.isFile() &&
-        passesPatterns(relativePath, config, outputArchive)
+        passesPatterns(relativePath, config, outputArchive, workspaceScope)
       ) {
         const stat = await lstat(absolutePath);
         files.push({
@@ -299,12 +314,18 @@ async function collectWithWalk(
   return files;
 }
 
-export async function collectFiles(
+export async function collectProjectFiles(
   config: PackageConfig,
   outputArchive?: string,
-): Promise<CollectedFile[]> {
-  const gitResult = await collectWithGit(config, outputArchive);
-  const collected = gitResult ?? (await collectWithWalk(config, outputArchive));
+  inheritedWorkspaceScope?: ManifestMonorepo,
+  resolvedWorkspaceScope?: WorkspaceScope,
+): Promise<{ files: CollectedFile[]; workspaceScope?: WorkspaceScope }> {
+  const workspaceScope =
+    resolvedWorkspaceScope ??
+    (await resolveWorkspaceScope(config, inheritedWorkspaceScope));
+  const gitResult = await collectWithGit(config, outputArchive, workspaceScope);
+  const collected =
+    gitResult ?? (await collectWithWalk(config, outputArchive, workspaceScope));
   const forced = await collectForceIncludedFiles(config, outputArchive);
   const files = new Map<string, CollectedFile>();
   for (const file of [...collected, ...forced])
@@ -325,7 +346,17 @@ export async function collectFiles(
       'DUPLICATE_PATH',
     );
   }
-  return [...files.values()].sort((left, right) =>
-    left.relativePath.localeCompare(right.relativePath),
-  );
+  return {
+    files: [...files.values()].sort((left, right) =>
+      left.relativePath.localeCompare(right.relativePath),
+    ),
+    ...(workspaceScope ? { workspaceScope } : {}),
+  };
+}
+
+export async function collectFiles(
+  config: PackageConfig,
+  outputArchive?: string,
+): Promise<CollectedFile[]> {
+  return (await collectProjectFiles(config, outputArchive)).files;
 }

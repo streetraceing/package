@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { lstat, mkdir, readFile, realpath } from 'node:fs/promises';
-import type { ArchiveEntry, PackageConfig } from '../types.js';
-import { collectFiles } from '../files/collect.js';
+import type { ArchiveEntry, PackageConfig, WorkspaceScope } from '../types.js';
+import { collectProjectFiles } from '../files/collect.js';
 import { findSensitiveFiles } from '../files/sensitive.js';
 import { createManifest } from '../manifest/create.js';
 import { writeZip } from '../archive/zip.js';
@@ -27,15 +27,40 @@ import {
   packageManifestPath,
   packageShiftPath,
 } from '../archive/metadata.js';
+import {
+  resolveWorkspaceScope,
+  workspaceArchiveLabel,
+} from '../workspaces/discover.js';
 
 export interface ZipCommandOptions {
   output?: string;
   quiet?: boolean;
 }
 
-export function defaultArchivePath(config: PackageConfig): string {
+function safeArchiveLabel(value: string): string {
+  return (
+    value
+      .replace(/^@/, '')
+      .replace(/[^a-zA-Z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'workspace'
+  );
+}
+
+export function defaultArchivePath(
+  config: PackageConfig,
+  workspaceScope?: WorkspaceScope,
+): string {
   const folder = path.basename(config.root);
-  const fileName = config.name.replaceAll('{folder}', folder);
+  const workspaceLabel = safeArchiveLabel(
+    workspaceArchiveLabel(workspaceScope, folder),
+  );
+  const fileName =
+    workspaceScope && config.name === '{folder}.zip'
+      ? `${workspaceLabel}.zip`
+      : config.name
+          .replaceAll('{folder}', folder)
+          .replaceAll('{workspace}', workspaceLabel)
+          .replaceAll('{workspaces}', workspaceLabel);
   return path.resolve(config.output, fileName);
 }
 
@@ -102,9 +127,10 @@ export async function createSnapshot(
   config: PackageConfig,
   options: ZipCommandOptions = {},
 ): Promise<string> {
+  const workspaceScope = await resolveWorkspaceScope(config);
   const archivePath = options.output
     ? path.resolve(config.root, options.output)
-    : defaultArchivePath(config);
+    : defaultArchivePath(config, workspaceScope);
   await mkdir(path.dirname(archivePath), { recursive: true });
   await runPackageHooks('beforePackage', config.beforePackage, {
     root: config.root,
@@ -113,7 +139,12 @@ export async function createSnapshot(
     packageManager: config.packageManager,
     quiet: options.quiet,
   });
-  const files = await collectFiles(config, archivePath);
+  const { files } = await collectProjectFiles(
+    config,
+    archivePath,
+    undefined,
+    workspaceScope,
+  );
   const sensitive = findSensitiveFiles(files.map((file) => file.relativePath));
   if (sensitive.length > 0 && config.sensitiveFiles === 'error') {
     throw new PackageError(
@@ -130,7 +161,14 @@ export async function createSnapshot(
       `potentially sensitive files are included:\n${sensitive.map((file) => `  ${file}`).join('\n')}`,
     );
   }
-  const { manifest, data } = await createManifest(files, config, 'snapshot');
+  const { manifest, data } = await createManifest(
+    files,
+    config,
+    'snapshot',
+    undefined,
+    undefined,
+    workspaceScope,
+  );
   const entries: ArchiveEntry[] = [];
   for (const file of manifest.files) {
     const content = data.get(file.path);
@@ -185,6 +223,14 @@ export async function createSnapshot(
     console.log(
       `${color.muted(symbol.branch)} ${label('Source bytes')} ${color.blue(bytes.toLocaleString('en-US'))}`,
     );
+    if (workspaceScope)
+      console.log(
+        `${color.muted(symbol.branch)} ${label('Workspaces')} ${color.magenta(
+          workspaceScope.workspaces
+            .map((workspace) => workspace.name)
+            .join(', '),
+        )}`,
+      );
     if (manifest.rootHash)
       console.log(
         `${color.muted(symbol.lastBranch)} ${label('Root')} ${color.cyan(manifest.rootHash)}`,
