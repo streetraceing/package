@@ -91,6 +91,53 @@ async function createFixture(root: string): Promise<void> {
   await write(root, 'apps/admin/src/index.ts', 'export const admin = true;\n');
 }
 
+test('literal workspace paths do not include generated nested packages', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'package-monorepo-next-'));
+  try {
+    await write(
+      root,
+      'package.json',
+      JSON.stringify({
+        name: 'codeissue',
+        private: true,
+        workspaces: ['website', 'backend'],
+      }),
+    );
+    await write(
+      root,
+      'website/package.json',
+      '{"name":"codeissue-website","private":true}\n',
+    );
+    await write(
+      root,
+      'backend/package.json',
+      '{"name":"codeissue-backend","private":true}\n',
+    );
+    await write(root, 'website/.next/dev/package.json', '{"name":"dev"}\n');
+    await write(
+      root,
+      'website/.next/dev/build/package.json',
+      '{"name":"build"}\n',
+    );
+    await write(
+      root,
+      'website/dist/package.json',
+      '{"name":"generated-dist"}\n',
+    );
+
+    const discovery = await discoverWorkspaces(monorepoConfig(root));
+    assert.deepEqual(
+      discovery.workspaces.map((workspace) => [workspace.name, workspace.path]),
+      [
+        ['codeissue-backend', 'backend'],
+        ['codeissue-website', 'website'],
+      ],
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('detects, selects, and expands monorepo workspaces', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'package-monorepo-'));
   try {

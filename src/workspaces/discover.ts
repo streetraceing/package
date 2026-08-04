@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { readdir, readFile } from 'node:fs/promises';
 import { PackageError } from '../errors.js';
-import { matchesGlob } from '../files/ignore.js';
+import { globToRegex, matchesGlob } from '../files/ignore.js';
 import type {
   ManifestMonorepo,
   PackageConfig,
@@ -28,11 +28,29 @@ export interface WorkspaceDiscovery {
 }
 
 const ignoredDirectoryNames = new Set([
+  '.angular',
+  '.cache',
+  '.expo',
   '.git',
   '.hg',
-  '.svn',
+  '.next',
+  '.nuxt',
+  '.nx',
+  '.output',
   '.package-backups',
+  '.parcel-cache',
+  '.svelte-kit',
+  '.svn',
+  '.turbo',
+  '.vite',
+  'build',
+  'coverage',
+  'dist',
   'node_modules',
+  'out',
+  'target',
+  'temp',
+  'tmp',
 ]);
 
 const commonWorkspacePatterns = [
@@ -141,6 +159,18 @@ function normalizePatterns(patterns: readonly string[]): string[] {
   return [...normalized];
 }
 
+function workspacePatternMatches(
+  relativeDirectory: string,
+  pattern: string,
+): boolean {
+  // Workspace declarations are rooted path patterns. A literal such as
+  // "website" must match only that directory, not a nested package whose
+  // path happens to contain a "website" segment. The generic ignore glob
+  // matcher intentionally supports basename matching, so use its anchored
+  // regex representation here instead.
+  return globToRegex(pattern).test(relativeDirectory);
+}
+
 function matchesPatterns(
   relativeDirectory: string,
   patterns: string[],
@@ -149,7 +179,8 @@ function matchesPatterns(
   for (const rawPattern of patterns) {
     const negated = rawPattern.startsWith('!');
     const pattern = negated ? rawPattern.slice(1) : rawPattern;
-    if (matchesGlob(relativeDirectory, pattern)) selected = !negated;
+    if (workspacePatternMatches(relativeDirectory, pattern))
+      selected = !negated;
   }
   return selected;
 }
