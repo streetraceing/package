@@ -85,9 +85,12 @@ async function hasPayloadPathOverlap(
   return false;
 }
 
-async function targetPackageName(root: string): Promise<string | undefined> {
+async function targetPackageNameAt(
+  root: string,
+  relativePath = 'package.json',
+): Promise<string | undefined> {
   try {
-    return parsePackageName(await readFile(path.join(root, 'package.json')));
+    return parsePackageName(await readFile(resolveInside(root, relativePath)));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
     throw error;
@@ -102,11 +105,21 @@ export async function detectProjectMismatch(
   // A verified patch base is stronger evidence than directory/package names.
   if (baseMatches === true) return undefined;
 
-  const archivePackageName = pkg.entries.has('package.json')
-    ? parsePackageName(pkg.entries.get('package.json')?.data ?? '')
+  const compositionEntry = pkg.manifest.composition?.projects.find(
+    (project) => project.name === pkg.manifest.composition?.entry,
+  );
+  const entryPackagePath = compositionEntry
+    ? compositionEntry.path === '.'
+      ? 'package.json'
+      : `${compositionEntry.path}/package.json`
+    : 'package.json';
+  const archivePackageName = pkg.entries.has(entryPackagePath)
+    ? parsePackageName(pkg.entries.get(entryPackagePath)?.data ?? '')
     : undefined;
-  const targetName = await targetPackageName(projectRoot);
-  const targetProject = path.basename(path.resolve(projectRoot));
+  const targetName = await targetPackageNameAt(projectRoot, entryPackagePath);
+  const targetProject = compositionEntry
+    ? compositionEntry.name
+    : path.basename(path.resolve(projectRoot));
   const archiveProject =
     pkg.manifestSource === 'generated' ? undefined : pkg.manifest.project;
   const reasons: string[] = [];

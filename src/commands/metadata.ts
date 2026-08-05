@@ -6,7 +6,7 @@ import type {
   PackageManifest,
   ShiftInstruction,
 } from '../types.js';
-import { collectProjectFiles } from '../files/collect.js';
+import { collectConfiguredProjects } from '../projects/collect.js';
 import { createManifest } from '../manifest/create.js';
 import { loadManifestFile, loadPackage } from '../manifest/load.js';
 import { calculateShift } from '../shift/calculate.js';
@@ -35,6 +35,10 @@ import {
   resolveWorkspaceScope,
   workspaceScopeMatchesManifest,
 } from '../workspaces/discover.js';
+import {
+  compositionMatchesManifest,
+  resolveProjectComposition,
+} from '../projects/composition.js';
 
 export interface MetadataCommandOptions {
   message?: string;
@@ -123,12 +127,22 @@ export async function metadataCommand(
   const baseline = await loadBaseline(baseSource, config);
   if (baseline) assertSnapshotBaseline(baseline);
 
-  const workspaceScope = await resolveWorkspaceScope(
-    config,
-    baseline?.manifest.monorepo,
-  );
+  const composition = await resolveProjectComposition(config);
   if (
     baseline &&
+    !compositionMatchesManifest(composition, baseline.manifest.composition)
+  ) {
+    throw new PackageError(
+      'The local depends_on project graph does not match the metadata baseline. Restore the original graph or create a new snapshot.',
+      'PROJECT_COMPOSITION_MISMATCH',
+    );
+  }
+  const workspaceScope = composition
+    ? undefined
+    : await resolveWorkspaceScope(config, baseline?.manifest.monorepo);
+  if (
+    baseline &&
+    !composition &&
     !workspaceScopeMatchesManifest(workspaceScope, baseline.manifest.monorepo)
   ) {
     throw new PackageError(
@@ -137,11 +151,10 @@ export async function metadataCommand(
     );
   }
   const collectionConfig = configWithoutLocalBaselineArchive(config, baseline);
-  const { files } = await collectProjectFiles(
+  const { files } = await collectConfiguredProjects(
     collectionConfig,
     undefined,
-    baseline?.manifest.monorepo,
-    workspaceScope,
+    composition,
   );
   const { manifest } = await createManifest(
     files,
@@ -150,6 +163,7 @@ export async function metadataCommand(
     undefined,
     undefined,
     workspaceScope,
+    composition,
   );
 
   let instructions: ShiftInstruction[] = [];
@@ -209,6 +223,12 @@ export async function metadataCommand(
   console.log(
     `${color.muted(symbol.branch)} ${label('Structural operations')} ${color.magenta(String(structuralOperations))}`,
   );
+  if (composition)
+    console.log(
+      `${color.muted(symbol.branch)} ${label('Projects')} ${color.magenta(
+        composition.projects.map((project) => project.name).join(', '),
+      )}`,
+    );
   if (workspaceScope)
     console.log(
       `${color.muted(symbol.branch)} ${label('Workspaces')} ${color.magenta(

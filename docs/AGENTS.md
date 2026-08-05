@@ -369,9 +369,72 @@ Always excluded from ordinary source payload are Git metadata, dependencies,
 backup/cache directories, generated package metadata, and the output archive
 itself.
 
-### Monorepo-scoped snapshots and patches
+### Explicit multi-project composition
 
-Before packaging a monorepo, inspect discovery and resolve the intended scope:
+When an entry project's `.packagerc` contains `depends_on`, treat the archive as
+one composed delivery made from several independently configured projects.
+
+Example entry configuration in `codeissue/website/.packagerc`:
+
+```json
+{
+  "depends_on": [
+    {
+      "path": "../backend",
+      "name": "@codeissue/backend"
+    }
+  ]
+}
+```
+
+Inspect the graph before packaging:
+
+```bash
+cd codeissue/website
+package projects
+package projects --json
+```
+
+Then use the normal commands from the entry project:
+
+```bash
+package zip
+package shift website.zip --output update.zip
+package apply update.zip --dry-run
+package apply update.zip --yes
+```
+
+Important invariants for agents:
+
+- do not flatten `website/**` and `backend/**`; archive paths stay relative to
+  their shared parent directory;
+- preserve every project's `.packagerc` unless the user explicitly requests a
+  configuration change; Package carries discovered local config files even when
+  an ordinary project ignore rule would omit them;
+- collect each project with its own include/ignore, force, Git/package-manager,
+  sensitive-file, mode, and mtime rules;
+- read `manifest.composition` and preserve its entry project, project paths,
+  names, and dependency edges throughout a snapshot/patch chain;
+- do not silently add or remove a dependency from the graph while creating a
+  patch; create a new base snapshot when the intended composition changes;
+- run lifecycle hooks only through Package. Hooks execute dependency-first, with
+  the owning project's directory as `cwd`;
+- reject cycles, duplicate project names, missing project directories, roots on
+  different volumes, filesystem-root-wide compositions, and path collisions.
+
+The entry project owns archive-level policies such as output, compression,
+conflict behavior, backups, and cleanup. Agents should run `apply` from the entry
+project so those policies are loaded; Package itself resolves the shared target
+root and updates all composed project directories.
+
+`depends_on` and legacy workspace selection are intentionally mutually exclusive.
+Use explicit composition when projects have their own `.packagerc` files and
+must be delivered together.
+
+### Legacy monorepo-scoped snapshots and patches
+
+Before packaging a package-manager monorepo without `depends_on`, inspect
+discovery and resolve the intended scope:
 
 ```bash
 package workspaces
@@ -387,23 +450,13 @@ package zip -w apps/web -w packages/ui
 package zip --all-workspaces --no-root-files
 ```
 
-Workspace payload paths always remain relative to the monorepo root. Do not move
-selected files to an artificial workspace-only root. Root lockfiles and shared
-configuration are controlled by `monorepo.shared` and `includeRootFiles`.
+Workspace payload paths remain relative to the monorepo root. Root lockfiles and
+shared configuration are controlled by `monorepo.shared` and
+`includeRootFiles`.
 
 The snapshot manifest stores `monorepo.root`, selected workspace names/paths, and
-the root-file policy. When creating metadata or a patch, do not restate or change
-the scope unless the user explicitly asks for a new base snapshot:
-
-```bash
-package shift scoped-base.zip --output scoped-update.zip
-package metadata scoped-base.zip
-```
-
-These commands inherit the base scope, continue tracking a workspace that was
-removed from the current checkout, and reject a conflicting explicit selection
-with `WORKSPACE_SCOPE_MISMATCH`. This guard is intentional: changing scope in the
-middle of a patch chain can misclassify unselected files as additions/removals.
+the root-file policy. `shift` and `metadata` inherit that scope and reject a
+conflicting explicit selection with `WORKSPACE_SCOPE_MISMATCH`.
 
 ### Create a patch from a snapshot
 
@@ -574,7 +627,9 @@ Hooks may be one shell command string or an array of commands.
 Execution rules:
 
 - commands run sequentially;
-- working directory is the project root;
+- in a single project, the working directory is that project root;
+- in a `depends_on` composition, hooks run dependency-first and each command's
+  working directory is the project that declared it;
 - `beforePackage` and `afterPackage` wrap `zip` and `shift`;
 - `beforeApply` runs after validation and confirmation, before writes;
 - `afterApply` runs after successful writes;
@@ -589,6 +644,9 @@ PACKAGE_COMMAND
 PACKAGE_ROOT
 PACKAGE_ARCHIVE
 PACKAGE_MANAGER
+PACKAGE_PROJECT_NAME
+PACKAGE_PROJECT_PATH
+PACKAGE_COMPOSITION_ROOT
 ```
 
 `packageManager` defaults to `npm`, but may name `pnpm`, `yarn`, `bun`, or any

@@ -15,7 +15,9 @@ copy of a project.
 - selective apply writes only added, modified, or mode-changed files by default;
 - path, archive-integrity, base-project, and per-file conflict checks, with
   versioned backups, rollback history, recovery backups, and a deleted-file cache;
-- first-class monorepo workspace discovery, dependency-aware scoping, and safe
+- explicit multi-project composition through local `depends_on` declarations, with
+  per-project file rules and lifecycle hooks;
+- legacy monorepo workspace discovery, dependency-aware scoping, and safe
   workspace patch inheritance;
 - readable colorized terminal output with automatic plain-text fallback.
 
@@ -82,7 +84,94 @@ npx @streetraceing/package update.zip diff
 
 Run `npx @streetraceing/package --help` to see every command and option.
 
-## Monorepo workspaces
+## Composing related projects with `depends_on`
+
+For repositories that contain separately configured applications, prefer explicit
+project composition over workspace selection. The entry project declares exactly
+which other local projects must travel with it, and every project keeps its own
+`.packagerc`.
+
+For example:
+
+```text
+codeissue/
+├─ website/
+│  ├─ .packagerc
+│  └─ package.json
+└─ backend/
+   ├─ .packagerc
+   └─ package.json
+```
+
+`codeissue/website/.packagerc`:
+
+```json
+{
+  "depends_on": [
+    {
+      "path": "../backend",
+      "name": "@codeissue/backend"
+    }
+  ],
+  "afterApply": ["npm install", "npm run build"]
+}
+```
+
+`codeissue/backend/.packagerc`:
+
+```json
+{
+  "ignore": ["coverage/**"],
+  "afterApply": ["npm install", "npm run migrate"]
+}
+```
+
+Work from the entry project exactly as with a single repository:
+
+```bash
+cd codeissue/website
+package projects
+package zip
+package shift website.zip --output update.zip
+package apply update.zip --dry-run
+package apply update.zip --yes
+```
+
+`package projects` shows the resolved dependency graph before packaging. The ZIP
+above contains `website/**` and `backend/**`, rooted at their shared `codeissue`
+directory. `depends_on` is recursive, so `backend` may declare its own dependent
+projects. Cycles, duplicate names, missing directories, filesystem-root scopes,
+and colliding archive paths are rejected.
+
+Each project is collected using its own `.packagerc`: `include`, `ignore`,
+`forceInclude`, Git/package-manager ignore handling, sensitive-file policy,
+`preserveMode`, and `preserveMtime` are evaluated locally. The discovered local
+`.packagerc` is always carried with its project, even if an ordinary ignore rule
+would otherwise omit it. `beforePackage`,
+`afterPackage`, `beforeApply`, and `afterApply` also come from each project and
+run in dependency-first order with that project's directory as the working
+directory. The environment additionally exposes `PACKAGE_PROJECT_NAME`,
+`PACKAGE_PROJECT_PATH`, and `PACKAGE_COMPOSITION_ROOT`.
+
+The entry project's configuration controls archive-level settings such as
+`name`, `output`, compression, deterministic ZIP output, conflict policy,
+backups, and archive cleanup. Run `apply` from the entry project as well: Package
+uses that local policy, validates the same `depends_on` graph, and automatically
+writes archive paths relative to the shared `codeissue` root. You do not need to
+move to the shared root manually.
+
+A short path form is also accepted:
+
+```json
+{
+  "depends_on": ["../backend"]
+}
+```
+
+The name then comes from the dependent project's `package.json`, falling back to
+its directory name.
+
+## Legacy monorepo workspace scoping
 
 Package automatically discovers npm, pnpm, Yarn, Bun, Lerna, and Rush-style
 workspace layouts from `package.json#workspaces`, `pnpm-workspace.yaml`,
@@ -227,8 +316,11 @@ Package lifecycle hooks and archive cleanup are opt-in:
 runs after validation and confirmation but before files are changed. `afterApply`
 runs after a successful apply as a best-effort hook: failed commands produce
 warnings, do not roll back project changes, and do not stop later hooks or archive
-cleanup. Hooks run sequentially from the project root and receive `PACKAGE_HOOK`,
-`PACKAGE_COMMAND`, `PACKAGE_ROOT`, `PACKAGE_ARCHIVE`, and `PACKAGE_MANAGER`.
+cleanup. For a single project, hooks run sequentially from its root. With `depends_on`,
+hooks run dependency-first from each owning project's root. They receive
+`PACKAGE_HOOK`, `PACKAGE_COMMAND`, `PACKAGE_ROOT`, `PACKAGE_ARCHIVE`,
+`PACKAGE_MANAGER`, `PACKAGE_PROJECT_NAME`, `PACKAGE_PROJECT_PATH`, and
+`PACKAGE_COMPOSITION_ROOT`.
 Empty arrays run nothing. `deletePackageOnApply` defaults to `false`; when enabled, the applied ZIP
 is deleted after the project files are applied, even if an `afterApply` command
 reports an error.

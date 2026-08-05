@@ -3,7 +3,7 @@ import { access, readFile, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { loadPackage } from '../manifest/load.js';
 import { exampleConfig } from '../config.js';
-import { collectFiles } from '../files/collect.js';
+import { collectConfiguredProjects } from '../projects/collect.js';
 import type { PackageConfig } from '../types.js';
 import { PackageError } from '../errors.js';
 import {
@@ -72,6 +72,24 @@ export async function inspectCommand(
   console.log(
     `${color.muted(symbol.branch)} ${label('Root')} ${color.cyan(pkg.manifest.rootHash)}`,
   );
+  if (pkg.manifest.composition) {
+    console.log(
+      `${color.muted(symbol.branch)} ${label('Entry project')} ${color.cyan(pkg.manifest.composition.entry)}`,
+    );
+    console.log(
+      `${color.muted(symbol.branch)} ${label('Project composition')} ${color.magenta(
+        pkg.manifest.composition.projects
+          .map((project) => {
+            const dependencies =
+              project.dependsOn.length > 0
+                ? ` -> ${project.dependsOn.join(', ')}`
+                : '';
+            return `${project.name} (${project.path})${dependencies}`;
+          })
+          .join(', '),
+      )}`,
+    );
+  }
   if (pkg.manifest.monorepo) {
     console.log(
       `${color.muted(symbol.branch)} ${label('Workspace scope')} ${color.magenta(
@@ -148,7 +166,9 @@ export async function listCommand(
     const pkg = await loadPackage(path.resolve(config.root, archivePath));
     paths = pkg.manifest.files.map((file) => file.path);
   } else {
-    paths = (await collectFiles(config)).map((file) => file.relativePath);
+    paths = (await collectConfiguredProjects(config)).files.map(
+      (file) => file.relativePath,
+    );
   }
   if (json) console.log(JSON.stringify(paths, null, 2));
   else for (const filePath of paths) console.log(filePath);

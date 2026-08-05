@@ -42,6 +42,7 @@ export const defaultConfig: PackageConfig = {
   deletePackageOnApply: false,
   deleteSourcePackageOnApply: false,
   saveDeletedCache: true,
+  depends_on: [],
   monorepo: {
     mode: 'auto',
     workspacePatterns: [],
@@ -137,6 +138,7 @@ function validateConfig(
     'deleteSourcePackageOnApply',
     'saveDeletedCache',
     'monorepo',
+    'depends_on',
   ]);
 
   for (const key of Object.keys(config)) {
@@ -237,6 +239,69 @@ function validateConfig(
     config.npmignore !== undefined
   ) {
     config.packageManagerIgnore = config.npmignore;
+  }
+
+  if (config.depends_on !== undefined) {
+    if (!Array.isArray(config.depends_on)) {
+      throw new PackageError(
+        `${sourceName}: depends_on must be an array.`,
+        'CONFIG_INVALID',
+      );
+    }
+    const dependencies: Array<{ path: string; name?: string }> = [];
+    for (const [index, item] of config.depends_on.entries()) {
+      if (typeof item === 'string') {
+        if (item.trim().length === 0) {
+          throw new PackageError(
+            `${sourceName}: depends_on[${index}] must not be empty.`,
+            'CONFIG_INVALID',
+          );
+        }
+        dependencies.push({ path: item });
+        continue;
+      }
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        throw new PackageError(
+          `${sourceName}: depends_on[${index}] must be a path string or an object.`,
+          'CONFIG_INVALID',
+        );
+      }
+      const dependency = item as Record<string, unknown>;
+      for (const key of Object.keys(dependency)) {
+        if (key !== 'path' && key !== 'name') {
+          throw new PackageError(
+            `${sourceName}: unknown depends_on[${index}] option ${JSON.stringify(key)}.`,
+            'CONFIG_INVALID',
+          );
+        }
+      }
+      if (
+        typeof dependency.path !== 'string' ||
+        dependency.path.trim().length === 0
+      ) {
+        throw new PackageError(
+          `${sourceName}: depends_on[${index}].path must be a non-empty string.`,
+          'CONFIG_INVALID',
+        );
+      }
+      if (
+        dependency.name !== undefined &&
+        (typeof dependency.name !== 'string' ||
+          dependency.name.trim().length === 0)
+      ) {
+        throw new PackageError(
+          `${sourceName}: depends_on[${index}].name must be a non-empty string.`,
+          'CONFIG_INVALID',
+        );
+      }
+      dependencies.push({
+        path: dependency.path,
+        ...(typeof dependency.name === 'string'
+          ? { name: dependency.name }
+          : {}),
+      });
+    }
+    config.depends_on = dependencies;
   }
 
   const hookKeys = [

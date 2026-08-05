@@ -1,11 +1,16 @@
 import path from 'node:path';
 import { rm } from 'node:fs/promises';
 import { loadPackage } from '../manifest/load.js';
-import type { ApplyOptions, LoadedPackage } from '../types.js';
+import type {
+  ApplyOptions,
+  LoadedPackage,
+  ProjectComposition,
+} from '../types.js';
 import { applyPackage } from '../apply/transaction.js';
+import { PackageError } from '../errors.js';
 import { comparePackageToProject } from './compare.js';
 import { formatChanges } from './diff.js';
-import { runPackageHooks } from '../util/hooks.js';
+import { runPackageHooks, runProjectHookTargets } from '../util/hooks.js';
 import {
   deletePreparedSourcePackage,
   prepareSourcePackageCleanup,
@@ -30,10 +35,16 @@ import {
   confirmProjectMismatch,
   detectProjectMismatch,
 } from '../apply/project-identity.js';
+import {
+  compositionMatchesManifest,
+  projectHookTargets,
+  resolveCompositionAtTarget,
+} from '../projects/composition.js';
 
 interface ApplyContext {
   archivePath: string;
   projectRoot: string;
+  composition?: ProjectComposition;
 }
 
 function cleanupWarning(message: string, error?: unknown): void {
@@ -85,17 +96,28 @@ async function runAfterApplyHooks(
   options: ApplyOptions,
   context: ApplyContext,
 ): Promise<void> {
-  const failures = await runPackageHooks(
-    'afterApply',
-    options.afterApply ?? [],
-    {
-      root: context.projectRoot,
-      archivePath: context.archivePath,
-      command: 'apply',
-      packageManager: options.packageManager,
-    },
-    { failureMode: 'warn' },
-  );
+  const failures = options.afterApplyTargets
+    ? await runProjectHookTargets(
+        'afterApply',
+        options.afterApplyTargets,
+        {
+          archivePath: context.archivePath,
+          command: 'apply',
+          compositionRoot: context.projectRoot,
+        },
+        { failureMode: 'warn' },
+      )
+    : await runPackageHooks(
+        'afterApply',
+        options.afterApply ?? [],
+        {
+          root: context.projectRoot,
+          archivePath: context.archivePath,
+          command: 'apply',
+          packageManager: options.packageManager,
+        },
+        { failureMode: 'warn' },
+      );
 
   if (failures.length > 0) {
     cleanupWarning(
@@ -128,7 +150,16 @@ function detailLine(
 function printPackageMetadata(pkg: LoadedPackage, context: ApplyContext): void {
   section('Apply plan');
   detailLine(symbol.branch, 'Package', context.archivePath);
-  detailLine(symbol.lastBranch, 'Target', context.projectRoot);
+  detailLine(symbol.branch, 'Target', context.projectRoot);
+  if (context.composition) {
+    detailLine(
+      symbol.branch,
+      'Projects',
+      context.composition.projects
+        .map((project) => `${project.name} (${project.archivePath})`)
+        .join(', '),
+    );
+  }
   if (pkg.manifestSource === 'generated') {
     warning(
       'archive has no embedded manifest; applying ZIP-verified payload and .packageshift instructions without base verification.',
@@ -197,11 +228,46 @@ export async function applyCommand(
   archivePath: string,
   options: ApplyOptions,
 ): Promise<void> {
+  const archiveAbsolutePath = path.resolve(options.cwd, archivePath);
+  const pkg = await loadPackage(archiveAbsolutePath);
+  let composition: ProjectComposition | undefined;
+  if (pkg.manifest.composition) {
+    if (options.composition) {
+      if (
+        !compositionMatchesManifest(
+          options.composition,
+          pkg.manifest.composition,
+        )
+      ) {
+        throw new PackageError(
+          'Local depends_on project graph does not match the archive composition.',
+          'PROJECT_COMPOSITION_MISMATCH',
+        );
+      }
+      composition = options.composition;
+    } else {
+      composition = await resolveCompositionAtTarget(
+        path.resolve(options.cwd),
+        pkg.manifest.composition,
+      );
+    }
+  }
   const context: ApplyContext = {
-    archivePath: path.resolve(options.cwd, archivePath),
-    projectRoot: path.resolve(options.cwd),
+    archivePath: archiveAbsolutePath,
+    projectRoot: composition?.root ?? path.resolve(options.cwd),
+    ...(composition ? { composition } : {}),
   };
-  const pkg = await loadPackage(context.archivePath);
+  const effectiveOptions: ApplyOptions = {
+    ...options,
+    cwd: context.projectRoot,
+    ...(composition
+      ? {
+          composition,
+          beforeApplyTargets: projectHookTargets(composition, 'beforeApply'),
+          afterApplyTargets: projectHookTargets(composition, 'afterApply'),
+        }
+      : {}),
+  };
   const comparison = await comparePackageToProject(pkg, context.projectRoot);
   const projectMismatch = await detectProjectMismatch(
     pkg,
@@ -209,11 +275,11 @@ export async function applyCommand(
     comparison.baseMatches,
   );
   const sourceCleanupPlan =
-    !options.dryRun && options.deleteSourcePackageOnApply
+    !effectiveOptions.dryRun && effectiveOptions.deleteSourcePackageOnApply
       ? await prepareSourcePackageCleanup(pkg, context)
       : undefined;
   const deletedCache =
-    !options.dryRun && options.saveDeletedCache === true
+    !effectiveOptions.dryRun && effectiveOptions.saveDeletedCache === true
       ? new DeletedCacheSession(
           context.projectRoot,
           'apply',
@@ -222,10 +288,10 @@ export async function applyCommand(
       : undefined;
 
   printPackageMetadata(pkg, context);
-  printApplyPolicies(options);
+  printApplyPolicies(effectiveOptions);
   printRewriteExpansion(
     pkg,
-    options,
+    effectiveOptions,
     new Set(
       comparison.changes
         .filter((change) => change.kind !== 'UNCHANGED')
@@ -237,20 +303,20 @@ export async function applyCommand(
   section('Changes');
   console.log(formatChanges(comparison.changes));
   console.log('');
-  await confirmProjectMismatch(projectMismatch, options);
-  if (projectMismatch && !options.dryRun) console.log('');
+  await confirmProjectMismatch(projectMismatch, effectiveOptions);
+  if (projectMismatch && !effectiveOptions.dryRun) console.log('');
 
   const result = await applyPackage(
     pkg,
     {
-      ...options,
+      ...effectiveOptions,
       cwd: context.projectRoot,
     },
     deletedCache,
   );
 
-  section(options.dryRun ? 'Dry-run result' : 'Apply result');
-  if (options.dryRun) {
+  section(effectiveOptions.dryRun ? 'Dry-run result' : 'Apply result');
+  if (effectiveOptions.dryRun) {
     console.log(
       `${statusPrefix('info')} ${color.blue('No files were written.')} ${color.light(
         `${applySummary(
@@ -285,9 +351,9 @@ export async function applyCommand(
       `${color.muted(symbol.branch)} ${color.yellow(symbol.warning)} ${label('Skipped conflicts')} ${color.yellow(result.skippedPaths.join(', '))}`,
     );
 
-  if (!options.dryRun) {
+  if (!effectiveOptions.dryRun) {
     await runPostApplyLifecycle(
-      options,
+      effectiveOptions,
       context,
       sourceCleanupPlan,
       deletedCache,

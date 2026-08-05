@@ -13,6 +13,7 @@ Usage:
   package inspect <archive.zip> [--json]
   package check <archive.zip>
   package list [archive.zip] [--json]
+  package projects [--json]
   package workspaces [selector] [--json]
   package init [--force]
 
@@ -43,7 +44,21 @@ Core options:
   --json                      Machine-readable output
   -q, --quiet                 Reduce output
 
-Monorepo options:
+
+Project composition:
+  Declare sibling or related projects in the entry project's .packagerc:
+    "depends_on": [{ "path": "../backend", "name": "@codeissue/backend" }]
+
+  package projects             Show the resolved project graph and archive root
+  package zip                  Package the entry project and every depends_on project
+  package shift base.zip       Update the same project graph
+  package apply update.zip     Apply paths from the shared root and run each project's hooks locally
+
+Each composed project loads its own .packagerc. File rules and lifecycle hooks
+belong to that project; hooks run in dependency-first order from its own root.
+The entry project controls archive-level output, compression, and apply policy.
+
+Legacy monorepo workspace options:
   -w, --workspace <selector>  Select by package name, path, basename, or glob; repeatable
   --all-workspaces            Select every detected workspace
   --workspace-pattern <glob>  Add a workspace directory pattern; repeatable
@@ -52,7 +67,7 @@ Monorepo options:
   --[no-]root-files           Include or exclude configured root-shared files
   --[no-]monorepo             Force-enable or disable workspace discovery
 
-Workspace discovery reads package.json workspaces, pnpm-workspace.yaml,
+Legacy workspace discovery reads package.json workspaces, pnpm-workspace.yaml,
 lerna.json, and rush.json. Scoped archives keep monorepo-root-relative paths.
 
 Apply options:
@@ -97,6 +112,7 @@ Metadata generation:
 Examples:
   package zip
   package zip ./my-project --output release.zip
+  package projects
   package workspaces
   package zip --workspace @acme/api --with-dependencies
   package zip --all-workspaces --no-root-files

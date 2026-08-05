@@ -8,8 +8,10 @@ import type {
   PackageConfig,
   PackageManifest,
   WorkspaceScope,
+  ProjectComposition,
 } from '../types.js';
 import { manifestMonorepo } from '../workspaces/discover.js';
+import { manifestComposition } from '../projects/composition.js';
 
 export async function createManifest(
   files: CollectedFile[],
@@ -18,6 +20,7 @@ export async function createManifest(
   baseRootHash?: string,
   baseFiles?: ManifestFile[],
   workspaceScope?: WorkspaceScope,
+  composition?: ProjectComposition,
 ): Promise<{ manifest: PackageManifest; data: Map<string, Buffer> }> {
   const manifestFiles: ManifestFile[] = [];
   const data = new Map<string, Buffer>();
@@ -28,8 +31,10 @@ export async function createManifest(
     manifestFiles.push({
       path: file.relativePath,
       size: content.length,
-      mode: config.preserveMode ? file.mode : 0o644,
-      ...(config.preserveMtime ? { mtime: file.mtime.toISOString() } : {}),
+      mode: (file.preserveMode ?? config.preserveMode) ? file.mode : 0o644,
+      ...((file.preserveMtime ?? config.preserveMtime)
+        ? { mtime: file.mtime.toISOString() }
+        : {}),
       sha256: sha256Buffer(content),
     });
   }
@@ -38,13 +43,16 @@ export async function createManifest(
   const manifest: PackageManifest = {
     schemaVersion: 1,
     kind,
-    project: path.basename(config.root),
+    project: composition?.entry ?? path.basename(config.root),
     createdAt: new Date().toISOString(),
     rootHash,
     ...(baseRootHash ? { baseRootHash } : {}),
     ...(baseFiles ? { baseFiles } : {}),
     ...(manifestMonorepo(workspaceScope)
       ? { monorepo: manifestMonorepo(workspaceScope) }
+      : {}),
+    ...(manifestComposition(composition)
+      ? { composition: manifestComposition(composition) }
       : {}),
     config: {
       strategy: config.strategy,

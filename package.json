@@ -49,7 +49,9 @@
     "gitignore",
     "typescript",
     "monorepo",
-    "workspace"
+    "workspace",
+    "multi-project",
+    "composition"
   ],
   "devDependencies": {
     "@types/node": "^22.15.0",

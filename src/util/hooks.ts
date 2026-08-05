@@ -13,6 +13,9 @@ export interface PackageHookContext {
   command: PackageCommandName;
   packageManager?: string;
   quiet?: boolean;
+  projectName?: string;
+  projectPath?: string;
+  compositionRoot?: string;
 }
 
 export interface PackageHookFailure {
@@ -57,6 +60,9 @@ function runHookScript(
         PACKAGE_ROOT: context.root,
         PACKAGE_ARCHIVE: context.archivePath,
         PACKAGE_MANAGER: packageManager,
+        PACKAGE_PROJECT_NAME: context.projectName ?? '',
+        PACKAGE_PROJECT_PATH: context.projectPath ?? '.',
+        PACKAGE_COMPOSITION_ROOT: context.compositionRoot ?? context.root,
       },
     });
 
@@ -105,10 +111,14 @@ export async function runPackageHooks(
       '{packageManager}',
       packageManager,
     );
-    if (!context.quiet)
+    if (!context.quiet) {
+      const project = context.projectName
+        ? ` ${color.cyan(`[${context.projectName}]`)}`
+        : '';
       console.log(
-        `${color.muted(symbol.branch)} ${color.magenta(symbol.hook)} ${label(hook)} ${color.bold(resolvedScript)} ${color.muted(`${symbol.arrow} ${context.command}`)}`,
+        `${color.muted(symbol.branch)} ${color.magenta(symbol.hook)} ${label(hook)}${project} ${color.bold(resolvedScript)} ${color.muted(`${symbol.arrow} ${context.command}`)}`,
       );
+    }
     try {
       await runHookScript(script, hook, context);
     } catch (error) {
@@ -119,5 +129,35 @@ export async function runPackageHooks(
     }
   }
 
+  return failures;
+}
+
+export async function runProjectHookTargets(
+  hook: PackageHookName,
+  targets: readonly import('../types.js').ProjectHookTarget[],
+  context: Pick<PackageHookContext, 'archivePath' | 'command' | 'quiet'> & {
+    compositionRoot: string;
+  },
+  options: RunPackageHooksOptions = {},
+): Promise<PackageHookFailure[]> {
+  const failures: PackageHookFailure[] = [];
+  for (const target of targets) {
+    const result = await runPackageHooks(
+      hook,
+      target.scripts,
+      {
+        root: target.root,
+        archivePath: context.archivePath,
+        command: context.command,
+        packageManager: target.packageManager,
+        quiet: context.quiet,
+        projectName: target.name,
+        projectPath: target.path,
+        compositionRoot: context.compositionRoot,
+      },
+      options,
+    );
+    failures.push(...result);
+  }
   return failures;
 }

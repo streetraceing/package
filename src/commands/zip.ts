@@ -1,14 +1,14 @@
 import path from 'node:path';
 import { lstat, mkdir, readFile, realpath } from 'node:fs/promises';
 import type { ArchiveEntry, PackageConfig, WorkspaceScope } from '../types.js';
-import { collectProjectFiles } from '../files/collect.js';
+import { collectConfiguredProjects } from '../projects/collect.js';
 import { findSensitiveFiles } from '../files/sensitive.js';
 import { createManifest } from '../manifest/create.js';
 import { writeZip } from '../archive/zip.js';
 import { PackageError } from '../errors.js';
 import { parseShift } from '../shift/parser.js';
 import { resolveInside } from '../util/path.js';
-import { runPackageHooks } from '../util/hooks.js';
+import { runProjectHookTargets } from '../util/hooks.js';
 import {
   DeletedCacheSession,
   reportDeletedCache,
@@ -31,6 +31,10 @@ import {
   resolveWorkspaceScope,
   workspaceArchiveLabel,
 } from '../workspaces/discover.js';
+import {
+  projectHookTargets,
+  resolveProjectComposition,
+} from '../projects/composition.js';
 
 export interface ZipCommandOptions {
   output?: string;
@@ -127,40 +131,57 @@ export async function createSnapshot(
   config: PackageConfig,
   options: ZipCommandOptions = {},
 ): Promise<string> {
-  const workspaceScope = await resolveWorkspaceScope(config);
+  const composition = await resolveProjectComposition(config);
+  const workspaceScope = composition
+    ? undefined
+    : await resolveWorkspaceScope(config);
   const archivePath = options.output
     ? path.resolve(config.root, options.output)
     : defaultArchivePath(config, workspaceScope);
   await mkdir(path.dirname(archivePath), { recursive: true });
-  await runPackageHooks('beforePackage', config.beforePackage, {
-    root: config.root,
+
+  const beforeTargets = projectHookTargets(
+    composition,
+    'beforePackage',
+    config,
+  );
+  await runProjectHookTargets('beforePackage', beforeTargets, {
     archivePath,
     command: 'zip',
-    packageManager: config.packageManager,
     quiet: options.quiet,
+    compositionRoot: composition?.root ?? config.root,
   });
-  const { files } = await collectProjectFiles(
-    config,
-    archivePath,
-    undefined,
-    workspaceScope,
-  );
-  const sensitive = findSensitiveFiles(files.map((file) => file.relativePath));
-  if (sensitive.length > 0 && config.sensitiveFiles === 'error') {
-    throw new PackageError(
-      `Sensitive files would be included:\n${sensitive.map((file) => `  ${file}`).join('\n')}`,
-      'SENSITIVE_FILES',
+
+  const collection = composition
+    ? await collectConfiguredProjects(config, archivePath, composition)
+    : await collectConfiguredProjects(config, archivePath);
+  const { files } = collection;
+
+  for (const group of collection.groups) {
+    const sensitive = findSensitiveFiles(
+      group.files.map((file) =>
+        group.path === '.'
+          ? file.relativePath
+          : file.relativePath.slice(group.path.length + 1),
+      ),
     );
+    if (sensitive.length > 0 && group.config.sensitiveFiles === 'error') {
+      throw new PackageError(
+        `Sensitive files would be included from ${group.name}:\n${sensitive.map((file) => `  ${file}`).join('\n')}`,
+        'SENSITIVE_FILES',
+      );
+    }
+    if (
+      sensitive.length > 0 &&
+      group.config.sensitiveFiles === 'warn' &&
+      !options.quiet
+    ) {
+      warning(
+        `potentially sensitive files are included from ${group.name}:\n${sensitive.map((file) => `  ${file}`).join('\n')}`,
+      );
+    }
   }
-  if (
-    sensitive.length > 0 &&
-    config.sensitiveFiles === 'warn' &&
-    !options.quiet
-  ) {
-    warning(
-      `potentially sensitive files are included:\n${sensitive.map((file) => `  ${file}`).join('\n')}`,
-    );
-  }
+
   const { manifest, data } = await createManifest(
     files,
     config,
@@ -168,6 +189,7 @@ export async function createSnapshot(
     undefined,
     undefined,
     workspaceScope,
+    composition,
   );
   const entries: ArchiveEntry[] = [];
   for (const file of manifest.files) {
@@ -206,13 +228,15 @@ export async function createSnapshot(
     deterministic: config.deterministic,
   });
   reportDeletedCache(deletedCache, options.quiet);
-  await runPackageHooks('afterPackage', config.afterPackage, {
-    root: config.root,
+
+  const afterTargets = projectHookTargets(composition, 'afterPackage', config);
+  await runProjectHookTargets('afterPackage', afterTargets, {
     archivePath,
     command: 'zip',
-    packageManager: config.packageManager,
     quiet: options.quiet,
+    compositionRoot: composition?.root ?? config.root,
   });
+
   if (!options.quiet) {
     const bytes = entries.reduce((sum, entry) => sum + entry.data.length, 0);
     section('Snapshot created');
@@ -223,6 +247,14 @@ export async function createSnapshot(
     console.log(
       `${color.muted(symbol.branch)} ${label('Source bytes')} ${color.blue(bytes.toLocaleString('en-US'))}`,
     );
+    if (composition)
+      console.log(
+        `${color.muted(symbol.branch)} ${label('Projects')} ${color.magenta(
+          composition.projects
+            .map((project) => `${project.name} (${project.archivePath})`)
+            .join(', '),
+        )}`,
+      );
     if (workspaceScope)
       console.log(
         `${color.muted(symbol.branch)} ${label('Workspaces')} ${color.magenta(
@@ -233,7 +265,7 @@ export async function createSnapshot(
       );
     if (manifest.rootHash)
       console.log(
-        `${color.muted(symbol.lastBranch)} ${label('Root')} ${color.cyan(manifest.rootHash)}`,
+        `${color.muted(symbol.branch)} ${label('Root')} ${color.cyan(manifest.rootHash)}`,
       );
     console.log(color.muted(divider(44)));
   }

@@ -18,6 +18,8 @@ import { backupCommand } from '../commands/backups.js';
 import { metadataCommand } from '../commands/metadata.js';
 import { colorizeHelp } from '../util/terminal.js';
 import { workspacesCommand } from '../commands/workspaces.js';
+import { projectsCommand } from '../commands/projects.js';
+import { resolveProjectComposition } from '../projects/composition.js';
 
 async function readVersion(): Promise<string> {
   const candidates = [
@@ -128,8 +130,10 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     );
     process.exitCode = exitCode;
   } else if (args.command === 'apply') {
+    const composition = await resolveProjectComposition(config);
     await applyCommand(requirePositional(args.positionals, 0, 'archive path'), {
       cwd: config.root,
+      ...(composition ? { composition } : {}),
       dryRun: args.dryRun,
       yes: args.yes,
       force: args.force,
@@ -175,6 +179,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     await listCommand(args.positionals[0], config, args.json);
   } else if (args.command === 'workspaces') {
     await workspacesCommand(config, args.json);
+  } else if (args.command === 'projects') {
+    await projectsCommand(config, args.json);
   } else {
     throw new PackageError(`Unknown command: ${args.command}`, 'CLI_COMMAND');
   }

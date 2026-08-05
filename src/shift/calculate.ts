@@ -6,6 +6,10 @@ import type {
 } from '../types.js';
 import { sha256File } from '../util/hash.js';
 
+function packagedMode(file: CollectedFile, config: PackageConfig): number {
+  return (file.preserveMode ?? config.preserveMode) ? file.mode & 0o777 : 0o644;
+}
+
 export interface CalculatedShift {
   instructions: ShiftInstruction[];
   payloadFiles: CollectedFile[];
@@ -42,8 +46,11 @@ export async function calculateShift(
     if (!previous) continue;
     const currentHash = currentHashes.get(file.relativePath);
     if (currentHash !== previous.sha256) modified.push(file);
-    else if ((file.mode & 0o777) !== (previous.mode & 0o777))
-      modeChanges.push({ path: file.relativePath, mode: file.mode & 0o777 });
+    else if (packagedMode(file, config) !== (previous.mode & 0o777))
+      modeChanges.push({
+        path: file.relativePath,
+        mode: packagedMode(file, config),
+      });
   }
 
   const instructions: ShiftInstruction[] = [];
@@ -76,11 +83,11 @@ export async function calculateShift(
         expectedHash: oldFile.sha256,
         line: 0,
       });
-      if ((oldFile.mode & 0o777) !== (candidate.mode & 0o777)) {
+      if ((oldFile.mode & 0o777) !== packagedMode(candidate, config)) {
         instructions.push({
           type: 'CHMOD',
           path: candidate.relativePath,
-          mode: candidate.mode & 0o777,
+          mode: packagedMode(candidate, config),
           line: 0,
         });
       }

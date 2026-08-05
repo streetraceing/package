@@ -45,6 +45,7 @@ const commands = new Set([
   'metadata',
   'meta',
   'workspaces',
+  'projects',
 ]);
 
 function takeValue(

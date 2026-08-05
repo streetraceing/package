@@ -25,7 +25,7 @@ import {
   readCurrentManifestFiles,
   rootHashForFiles,
 } from '../manifest/state.js';
-import { runPackageHooks } from '../util/hooks.js';
+import { runPackageHooks, runProjectHookTargets } from '../util/hooks.js';
 import type { DeletedCacheSession } from '../util/deleted-cache.js';
 import { captureBackup, persistBackup, restoreBackupItems } from './backups.js';
 import { packagePayloadFiles } from '../archive/metadata.js';
@@ -579,12 +579,20 @@ export async function applyPackage(
   if (!(await shouldProceed(options, plan.activePaths.length)))
     throw new PackageError('Apply cancelled.', 'APPLY_CANCELLED');
 
-  await runPackageHooks('beforeApply', options.beforeApply ?? [], {
-    root: options.cwd,
-    archivePath: pkg.archivePath,
-    command: 'apply',
-    packageManager: options.packageManager,
-  });
+  if (options.beforeApplyTargets) {
+    await runProjectHookTargets('beforeApply', options.beforeApplyTargets, {
+      archivePath: pkg.archivePath,
+      command: 'apply',
+      compositionRoot: options.cwd,
+    });
+  } else {
+    await runPackageHooks('beforeApply', options.beforeApply ?? [], {
+      root: options.cwd,
+      archivePath: pkg.archivePath,
+      command: 'apply',
+      packageManager: options.packageManager,
+    });
+  }
 
   await cacheDestructivePaths(options.cwd, plan, deletedCache);
   const backup = await captureBackup(options.cwd, plan.activePaths);

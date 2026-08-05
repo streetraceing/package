@@ -6,8 +6,9 @@ of a project.
 
 ## Recent updates
 
-- Monorepo layouts are auto-detected and can be scoped by workspace name, path,
-  glob, local dependencies, and local dependents.
+- Related local projects can be composed explicitly with project-local
+  `depends_on` declarations. Every project keeps its own file rules and hooks.
+- Workspace auto-discovery remains available as a legacy scoping workflow.
 - `forceInclude` and `forceIgnore` can override ordinary file-selection and
   ignore rules without weakening Package's internal safety exclusions.
 - Lifecycle hooks now support npm by default or another package manager/build
@@ -68,11 +69,86 @@ not bypass it. For an intentional automated cross-project apply, review with
 
 Run `npx @streetraceing/package --help` for the complete command reference.
 
-## Monorepo workflow
+## Project composition with `depends_on`
 
-Discovery supports `package.json#workspaces`, `pnpm-workspace.yaml`, `lerna.json`,
-and `rush.json`. This covers npm, pnpm, Yarn, Bun, Lerna, and Rush layouts,
-including Nx and Turbo repositories that declare package-manager workspaces.
+Use explicit composition when separately configured projects must be packaged and
+updated together. The project where the command is launched is the **entry
+project**. It declares local dependencies in its own `.packagerc`, and every
+dependent project loads its own `.packagerc` recursively.
+
+```text
+codeissue/
+├─ website/
+│  ├─ .packagerc
+│  └─ package.json
+└─ backend/
+   ├─ .packagerc
+   └─ package.json
+```
+
+`codeissue/website/.packagerc`:
+
+```json
+{
+  "depends_on": [
+    {
+      "path": "../backend",
+      "name": "@codeissue/backend"
+    }
+  ],
+  "afterApply": ["npm install", "npm run build"]
+}
+```
+
+`codeissue/backend/.packagerc`:
+
+```json
+{
+  "ignore": ["coverage/**"],
+  "afterApply": ["npm install", "npm run migrate"]
+}
+```
+
+Run the ordinary workflow from `website`:
+
+```bash
+cd codeissue/website
+package projects
+package zip
+package shift website.zip --output update.zip
+package apply update.zip --dry-run
+package apply update.zip --yes
+```
+
+The snapshot and update archive contain both `website/**` and `backend/**`, with
+paths rooted at their shared `codeissue` directory. `package projects` prints the
+resolved graph before packaging. `depends_on` may be recursive; cycles, missing
+directories, duplicate names, and colliding archive paths are rejected.
+
+Each project independently controls `include`, `ignore`, force rules, Git and
+package-manager ignore handling, sensitive-file policy, mode/mtime preservation,
+and lifecycle hooks. A discovered local `.packagerc` is always carried with its
+project, even when an ordinary ignore rule would omit it. Hooks run dependency-first in the directory of the project
+that owns them. The entry project controls archive-level settings such as output,
+compression, backup, conflict, and cleanup policies.
+
+A dependency may also use the short form:
+
+```json
+{
+  "depends_on": ["../backend"]
+}
+```
+
+Its name is inferred from `package.json`, then from the directory name. Run
+`apply` from the entry project; Package automatically targets the shared root, so
+both sibling directories are updated while entry-level apply policy is preserved.
+
+## Legacy monorepo workspace scoping
+
+Workspace discovery supports `package.json#workspaces`, `pnpm-workspace.yaml`,
+`lerna.json`, and `rush.json`. Use it only when a package-manager workspace scope
+is the desired delivery unit rather than an explicit project relationship.
 
 ```bash
 package workspaces
@@ -83,18 +159,13 @@ package zip --all-workspaces --no-root-files
 
 Selectors accept package names, root-relative paths, basenames, and globs. Local
 dependency and dependent expansion is recursive. Scoped payload paths remain
-relative to the monorepo root, and a configurable `monorepo.shared` allowlist can
-include root lockfiles and shared configuration.
+relative to the monorepo root, and `monorepo.shared` controls root lockfiles and
+shared configuration.
 
-The manifest records the workspace scope. `shift` and `metadata` inherit the
-base scope automatically and preserve deleted workspaces in comparison, while an
-explicit scope mismatch fails with `WORKSPACE_SCOPE_MISMATCH`. This prevents an
-update for one workspace from silently becoming a patch for another.
-
-Use `monorepo.mode: "on"` to force common-directory discovery, `"off"` to disable
-it, `monorepo.workspacePatterns` for custom/negated directory globs, and
-`monorepo.selection` for a persistent scope. The complete shape and defaults are
-in [the configuration schema](./schema.json).
+The manifest records the workspace scope. `shift` and `metadata` inherit it from
+the base snapshot and reject a conflicting explicit scope with
+`WORKSPACE_SCOPE_MISMATCH`. `depends_on` composition and workspace selection
+cannot be combined in one archive.
 
 ## File-selection priorities
 
@@ -143,9 +214,11 @@ alias.
   archive or in the project root whose manifest matches the project state before
   apply. Ambiguous or changed archives are preserved. It is `false` by default.
 
-Hook commands run sequentially from the project root and receive
-`PACKAGE_HOOK`, `PACKAGE_COMMAND`, `PACKAGE_ROOT`, `PACKAGE_ARCHIVE`, and
-`PACKAGE_MANAGER`.
+For one project, hook commands run sequentially from its root. In a
+`depends_on` composition, they run dependency-first from each owning project's
+root. Hook processes receive `PACKAGE_HOOK`, `PACKAGE_COMMAND`, `PACKAGE_ROOT`,
+`PACKAGE_ARCHIVE`, `PACKAGE_MANAGER`, `PACKAGE_PROJECT_NAME`,
+`PACKAGE_PROJECT_PATH`, and `PACKAGE_COMPOSITION_ROOT`.
 
 ## Deleted-file cache
 

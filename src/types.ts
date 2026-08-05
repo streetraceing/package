@@ -4,6 +4,11 @@ export type ConflictStrategy = 'abort' | 'overwrite' | 'skip';
 export type SensitiveFilesMode = 'warn' | 'error' | 'allow';
 export type MonorepoMode = 'auto' | 'off' | 'on';
 
+export interface ProjectDependencyConfig {
+  path: string;
+  name?: string;
+}
+
 export interface MonorepoConfig {
   mode: MonorepoMode;
   workspacePatterns: string[];
@@ -33,6 +38,43 @@ export interface ManifestMonorepo {
   root: '.';
   workspaces: Array<Pick<WorkspacePackage, 'name' | 'path'>>;
   includeRootFiles: boolean;
+}
+
+export interface ProjectCompositionItem {
+  name: string;
+  path: string;
+  configPath?: string;
+  dependsOn: string[];
+}
+
+export interface ManifestComposition {
+  root: '.';
+  entry: string;
+  projects: ProjectCompositionItem[];
+}
+
+export interface ResolvedProject {
+  name: string;
+  root: string;
+  configDirectory: string;
+  configPath?: string;
+  archivePath: string;
+  dependsOn: string[];
+  config: PackageConfig;
+}
+
+export interface ProjectComposition {
+  root: string;
+  entry: string;
+  projects: ResolvedProject[];
+}
+
+export interface ProjectHookTarget {
+  name: string;
+  path: string;
+  root: string;
+  scripts: string[];
+  packageManager: string;
 }
 
 export interface PackageConfig {
@@ -73,6 +115,7 @@ export interface PackageConfig {
   deleteSourcePackageOnApply: boolean;
   saveDeletedCache: boolean;
   monorepo: MonorepoConfig;
+  depends_on: ProjectDependencyConfig[];
 }
 
 export interface ManifestFile {
@@ -98,6 +141,7 @@ export interface PackageManifest {
   baseFiles?: ManifestFile[];
   sourcePackage?: SourcePackageReference;
   monorepo?: ManifestMonorepo;
+  composition?: ManifestComposition;
   config: Pick<PackageConfig, 'strategy' | 'gitignore' | 'npmignore' | 'dot'>;
   files: ManifestFile[];
 }
@@ -108,6 +152,9 @@ export interface CollectedFile {
   size: number;
   mode: number;
   mtime: Date;
+  preserveMode?: boolean;
+  preserveMtime?: boolean;
+  projectName?: string;
 }
 
 export type ShiftInstruction =
@@ -193,4 +240,7 @@ export interface ApplyOptions {
   deleteSourcePackageOnApply?: boolean;
   saveDeletedCache?: boolean;
   rewriteAll?: boolean;
+  composition?: ProjectComposition;
+  beforeApplyTargets?: ProjectHookTarget[];
+  afterApplyTargets?: ProjectHookTarget[];
 }

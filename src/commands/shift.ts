@@ -2,7 +2,7 @@ import path from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import type { ArchiveEntry, PackageConfig } from '../types.js';
 import { loadPackage } from '../manifest/load.js';
-import { collectProjectFiles } from '../files/collect.js';
+import { collectConfiguredProjects } from '../projects/collect.js';
 import { createManifest } from '../manifest/create.js';
 import { writeZip } from '../archive/zip.js';
 import { renderShift } from '../shift/render.js';
@@ -10,7 +10,7 @@ import { sha256File } from '../util/hash.js';
 import { calculateShift } from '../shift/calculate.js';
 import { PackageError } from '../errors.js';
 import { packageManifestPath, packageShiftPath } from '../archive/metadata.js';
-import { runPackageHooks } from '../util/hooks.js';
+import { runProjectHookTargets } from '../util/hooks.js';
 import {
   DeletedCacheSession,
   reportDeletedCache,
@@ -28,6 +28,11 @@ import {
   workspaceArchiveLabel,
   workspaceScopeMatchesManifest,
 } from '../workspaces/discover.js';
+import {
+  compositionMatchesManifest,
+  projectHookTargets,
+  resolveProjectComposition,
+} from '../projects/composition.js';
 
 export interface ShiftCommandOptions {
   output?: string;
@@ -47,16 +52,27 @@ export async function createShiftArchive(
       'The base archive must be a snapshot created by package zip.',
       'BASE_NOT_SNAPSHOT',
     );
-  const workspaceScope = await resolveWorkspaceScope(
-    config,
-    base.manifest.monorepo,
-  );
-  if (!workspaceScopeMatchesManifest(workspaceScope, base.manifest.monorepo)) {
+
+  const composition = await resolveProjectComposition(config);
+  if (!compositionMatchesManifest(composition, base.manifest.composition)) {
+    throw new PackageError(
+      'The local depends_on project graph does not match the base snapshot. Restore the original graph or create a new snapshot.',
+      'PROJECT_COMPOSITION_MISMATCH',
+    );
+  }
+  const workspaceScope = composition
+    ? undefined
+    : await resolveWorkspaceScope(config, base.manifest.monorepo);
+  if (
+    !composition &&
+    !workspaceScopeMatchesManifest(workspaceScope, base.manifest.monorepo)
+  ) {
     throw new PackageError(
       'Workspace selection does not match the base snapshot. Create a new snapshot for the requested workspace scope.',
       'WORKSPACE_SCOPE_MISMATCH',
     );
   }
+
   const archiveLabel = workspaceArchiveLabel(
     workspaceScope,
     path.basename(config.root),
@@ -67,13 +83,17 @@ export async function createShiftArchive(
     ? path.resolve(config.root, options.output)
     : path.resolve(config.output, `${archiveLabel}-shift.zip`);
   await mkdir(path.dirname(outputPath), { recursive: true });
-  await runPackageHooks('beforePackage', config.beforePackage, {
-    root: config.root,
-    archivePath: outputPath,
-    command: 'shift',
-    packageManager: config.packageManager,
-    quiet: options.quiet,
-  });
+
+  await runProjectHookTargets(
+    'beforePackage',
+    projectHookTargets(composition, 'beforePackage', config),
+    {
+      archivePath: outputPath,
+      command: 'shift',
+      quiet: options.quiet,
+      compositionRoot: composition?.root ?? config.root,
+    },
+  );
 
   const baseRelative = path
     .relative(config.root, resolvedBaseArchive)
@@ -82,12 +102,12 @@ export async function createShiftArchive(
     !baseRelative.startsWith('../') && !path.isAbsolute(baseRelative)
       ? { ...config, ignore: [...config.ignore, baseRelative] }
       : config;
-  const { files: currentFiles } = await collectProjectFiles(
+  const collection = await collectConfiguredProjects(
     collectionConfig,
     outputPath,
-    base.manifest.monorepo,
-    workspaceScope,
+    composition,
   );
+  const currentFiles = collection.files;
   const { instructions, payloadFiles, structuralOperations } =
     await calculateShift(base.manifest, currentFiles, config, options.message);
   const { manifest, data } = await createManifest(
@@ -97,6 +117,7 @@ export async function createShiftArchive(
     base.manifest.rootHash,
     base.manifest.files,
     workspaceScope,
+    composition,
   );
   manifest.sourcePackage = {
     name: path.basename(resolvedBaseArchive),
@@ -132,13 +153,17 @@ export async function createShiftArchive(
     deterministic: config.deterministic,
   });
   reportDeletedCache(deletedCache, options.quiet);
-  await runPackageHooks('afterPackage', config.afterPackage, {
-    root: config.root,
-    archivePath: outputPath,
-    command: 'shift',
-    packageManager: config.packageManager,
-    quiet: options.quiet,
-  });
+
+  await runProjectHookTargets(
+    'afterPackage',
+    projectHookTargets(composition, 'afterPackage', config),
+    {
+      archivePath: outputPath,
+      command: 'shift',
+      quiet: options.quiet,
+      compositionRoot: composition?.root ?? config.root,
+    },
+  );
 
   if (!options.quiet) {
     section('.packageshift archive created');
@@ -149,6 +174,12 @@ export async function createShiftArchive(
     console.log(
       `${color.muted(symbol.branch)} ${label('Structural operations')} ${color.magenta(String(structuralOperations))}`,
     );
+    if (composition)
+      console.log(
+        `${color.muted(symbol.branch)} ${label('Projects')} ${color.magenta(
+          composition.projects.map((project) => project.name).join(', '),
+        )}`,
+      );
     if (workspaceScope)
       console.log(
         `${color.muted(symbol.branch)} ${label('Workspaces')} ${color.magenta(
@@ -158,7 +189,7 @@ export async function createShiftArchive(
         )}`,
       );
     console.log(
-      `${color.muted(symbol.lastBranch)} ${label('Base')} ${color.cyan(base.manifest.rootHash)}`,
+      `${color.muted(symbol.branch)} ${label('Base')} ${color.cyan(base.manifest.rootHash)}`,
     );
     console.log(color.muted(divider(44)));
   }

@@ -105,6 +105,97 @@ export function validateManifest(
     }
   }
 
+  if (manifest.composition !== undefined) {
+    const composition = manifest.composition;
+    if (
+      !composition ||
+      typeof composition !== 'object' ||
+      composition.root !== '.' ||
+      typeof composition.entry !== 'string' ||
+      composition.entry.length === 0 ||
+      !Array.isArray(composition.projects) ||
+      composition.projects.length === 0
+    ) {
+      throw new PackageError(
+        `${sourcePath} contains invalid project composition metadata.`,
+        'MANIFEST_INVALID',
+      );
+    }
+    if (manifest.monorepo !== undefined) {
+      throw new PackageError(
+        `${sourcePath} cannot contain both monorepo and project composition metadata.`,
+        'MANIFEST_INVALID',
+      );
+    }
+    const names = new Set<string>();
+    const paths = new Set<string>();
+    for (const project of composition.projects) {
+      if (
+        !project ||
+        typeof project.name !== 'string' ||
+        project.name.length === 0 ||
+        typeof project.path !== 'string' ||
+        project.path.length === 0 ||
+        !Array.isArray(project.dependsOn) ||
+        !project.dependsOn.every(
+          (dependency) =>
+            typeof dependency === 'string' && dependency.length > 0,
+        ) ||
+        (project.configPath !== undefined &&
+          (typeof project.configPath !== 'string' ||
+            project.configPath.length === 0))
+      ) {
+        throw new PackageError(
+          `${sourcePath} contains an invalid composed project.`,
+          'MANIFEST_INVALID',
+        );
+      }
+      let normalizedPath: string;
+      try {
+        normalizedPath =
+          project.path === '.' ? '.' : normalizeRelativePath(project.path);
+        if (project.configPath !== undefined) {
+          const normalizedConfig = normalizeRelativePath(project.configPath);
+          if (normalizedConfig !== project.configPath) throw new Error();
+        }
+      } catch {
+        throw new PackageError(
+          `${sourcePath} contains an unsafe composed project path.`,
+          'MANIFEST_INVALID',
+        );
+      }
+      if (
+        normalizedPath !== project.path ||
+        names.has(project.name) ||
+        paths.has(normalizedPath) ||
+        new Set(project.dependsOn).size !== project.dependsOn.length
+      ) {
+        throw new PackageError(
+          `${sourcePath} contains duplicate or non-normalized project composition metadata.`,
+          'MANIFEST_INVALID',
+        );
+      }
+      names.add(project.name);
+      paths.add(normalizedPath);
+    }
+    if (!names.has(composition.entry)) {
+      throw new PackageError(
+        `${sourcePath} project composition entry is missing.`,
+        'MANIFEST_INVALID',
+      );
+    }
+    for (const project of composition.projects) {
+      for (const dependency of project.dependsOn) {
+        if (!names.has(dependency) || dependency === project.name) {
+          throw new PackageError(
+            `${sourcePath} contains an invalid project dependency reference.`,
+            'MANIFEST_INVALID',
+          );
+        }
+      }
+    }
+  }
+
   if (manifest.sourcePackage !== undefined) {
     const source = manifest.sourcePackage;
     if (
