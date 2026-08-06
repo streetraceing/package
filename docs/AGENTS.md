@@ -139,7 +139,18 @@ MESSAGE "Describe the delivered changes"
 Add explicit structural operations for removals, moves, copies, guarded
 replacements, and mode changes.
 
-Example:
+Minimal starter configuration:
+
+```json
+{
+  "$schema": "https://streetraceing.github.io/package/schema.json",
+  "name": "{folder}.zip",
+  "strategy": "git",
+  "gitignore": true
+}
+```
+
+An expanded configuration may contain:
 
 ```text
 PACKAGESHIFT 1
@@ -334,8 +345,11 @@ Example:
 }
 ```
 
-`package init` also creates or updates `.gitignore` with a generated `*.zip`
-rule so locally created package archives are not committed accidentally.
+`package init` creates the minimal form and also creates or updates `.gitignore`
+with a generated `*.zip` rule so locally created package archives are not
+committed accidentally. Omitted fields still use validated defaults. Use
+`package config --json` to inspect the effective configuration and
+`package init --full` only when an expanded template is intentionally wanted.
 
 Unless the user specifically requests a configuration change, preserve the
 existing `.packagerc` exactly. AI agents should not silently enable cleanup,
@@ -408,6 +422,8 @@ Important invariants for agents:
 
 - do not flatten `website/**` and `backend/**`; archive paths stay relative to
   their shared parent directory;
+- resolve every `depends_on.path` relative to the `.packagerc` that declares it,
+  not relative to that configuration's optional project `root`;
 - preserve every project's `.packagerc` unless the user explicitly requests a
   configuration change; Package carries discovered local config files even when
   an ordinary project ignore rule would omit them;

@@ -1,9 +1,10 @@
 import { deflateRawSync, inflateRawSync } from 'node:zlib';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { crc32 } from '../util/crc32.js';
 import { normalizeRelativePath } from '../util/path.js';
 import { PackageError } from '../errors.js';
 import type { ArchiveEntry, ReadArchiveEntry } from '../types.js';
+import { writeFileAtomic } from '../util/fs.js';
 
 const LOCAL_FILE_HEADER = 0x04034b50;
 const CENTRAL_FILE_HEADER = 0x02014b50;
@@ -47,7 +48,21 @@ export async function writeZip(
   entries: ArchiveEntry[],
   options: WriteZipOptions = {},
 ): Promise<void> {
-  const sorted = [...entries].sort((left, right) =>
+  const normalizedEntries = entries.map((entry) => ({
+    ...entry,
+    path: normalizeRelativePath(entry.path),
+  }));
+  const seenPaths = new Set<string>();
+  for (const entry of normalizedEntries) {
+    const portablePath = entry.path.toLowerCase();
+    if (seenPaths.has(portablePath))
+      throw new PackageError(
+        `Duplicate ZIP entry: ${entry.path}`,
+        'ZIP_DUPLICATE',
+      );
+    seenPaths.add(portablePath);
+  }
+  const sorted = normalizedEntries.sort((left, right) =>
     left.path.localeCompare(right.path),
   );
   if (sorted.length > 0xffff)
@@ -60,13 +75,13 @@ export async function writeZip(
   let offset = 0;
 
   for (const entry of sorted) {
-    const safePath = normalizeRelativePath(entry.path);
+    const safePath = entry.path;
     const name = Buffer.from(safePath, 'utf8');
     const raw = Buffer.from(entry.data);
-    if (raw.length > 0xffffffff)
+    if (raw.length > MAX_ENTRY_SIZE)
       throw new PackageError(
-        `ZIP64 is not supported for ${safePath}.`,
-        'ZIP64_UNSUPPORTED',
+        `ZIP entry exceeds the 1 GiB safety limit: ${safePath}.`,
+        'ZIP_TOO_LARGE',
       );
     const requestedMethod =
       entry.compression === 'store' || options.compressionLevel === 0 ? 0 : 8;
@@ -140,7 +155,10 @@ export async function writeZip(
   end.writeUInt32LE(centralOffset, 16);
   end.writeUInt16LE(0, 20);
 
-  await writeFile(filePath, Buffer.concat([...chunks, ...centralChunks, end]));
+  await writeFileAtomic(
+    filePath,
+    Buffer.concat([...chunks, ...centralChunks, end]),
+  );
 }
 
 function findEndRecord(data: Buffer): number {
@@ -161,26 +179,40 @@ export async function readZip(
   const endOffset = findEndRecord(data);
   const disk = data.readUInt16LE(endOffset + 4);
   const centralDisk = data.readUInt16LE(endOffset + 6);
+  const diskEntryCount = data.readUInt16LE(endOffset + 8);
   const entryCount = data.readUInt16LE(endOffset + 10);
   const centralSize = data.readUInt32LE(endOffset + 12);
   const centralOffset = data.readUInt32LE(endOffset + 16);
+  const archiveCommentLength = data.readUInt16LE(endOffset + 20);
+  if (endOffset + 22 + archiveCommentLength !== data.length)
+    throw new PackageError(
+      'Invalid ZIP end record or trailing archive data.',
+      'ZIP_INVALID',
+    );
   if (disk !== 0 || centralDisk !== 0)
     throw new PackageError(
       'Multi-disk ZIP archives are not supported.',
       'ZIP_UNSUPPORTED',
     );
-  if (centralOffset + centralSize > data.length)
+  if (diskEntryCount !== entryCount)
+    throw new PackageError(
+      'Multi-disk ZIP entry counts are not supported.',
+      'ZIP_UNSUPPORTED',
+    );
+  const centralEnd = centralOffset + centralSize;
+  if (centralEnd !== endOffset)
     throw new PackageError(
       'Invalid ZIP central directory bounds.',
       'ZIP_INVALID',
     );
   const entries = new Map<string, ReadArchiveEntry>();
+  const portablePaths = new Set<string>();
   let cursor = centralOffset;
   let expandedTotal = 0;
 
   for (let count = 0; count < entryCount; count += 1) {
     if (
-      cursor + 46 > data.length ||
+      cursor + 46 > centralEnd ||
       data.readUInt32LE(cursor) !== CENTRAL_FILE_HEADER
     ) {
       throw new PackageError(
@@ -217,7 +249,8 @@ export async function readZip(
       );
     const nameStart = cursor + 46;
     const nameEnd = nameStart + nameLength;
-    if (nameEnd > data.length)
+    const centralEntryEnd = nameEnd + extraLength + commentLength;
+    if (nameEnd > centralEnd || centralEntryEnd > centralEnd)
       throw new PackageError('Invalid ZIP entry name bounds.', 'ZIP_INVALID');
     const rawName = data
       .subarray(nameStart, nameEnd)
@@ -226,11 +259,13 @@ export async function readZip(
     const safePath = isDirectory
       ? normalizeRelativePath(rawName.slice(0, -1))
       : normalizeRelativePath(rawName);
-    if (entries.has(safePath))
+    const portablePath = safePath.toLowerCase();
+    if (entries.has(safePath) || portablePaths.has(portablePath))
       throw new PackageError(
         `Duplicate ZIP entry: ${safePath}`,
         'ZIP_DUPLICATE',
       );
+    portablePaths.add(portablePath);
     if (
       localOffset + 30 > data.length ||
       data.readUInt32LE(localOffset) !== LOCAL_FILE_HEADER
@@ -240,9 +275,40 @@ export async function readZip(
         'ZIP_INVALID',
       );
     }
+    const localFlags = data.readUInt16LE(localOffset + 6);
+    const localMethod = data.readUInt16LE(localOffset + 8);
+    const localCrc = data.readUInt32LE(localOffset + 14);
+    const localCompressedSize = data.readUInt32LE(localOffset + 18);
+    const localUncompressedSize = data.readUInt32LE(localOffset + 22);
     const localNameLength = data.readUInt16LE(localOffset + 26);
     const localExtraLength = data.readUInt16LE(localOffset + 28);
-    const payloadStart = localOffset + 30 + localNameLength + localExtraLength;
+    const localNameStart = localOffset + 30;
+    const localNameEnd = localNameStart + localNameLength;
+    if (localNameEnd > data.length)
+      throw new PackageError(
+        `Invalid local ZIP name bounds for ${safePath}.`,
+        'ZIP_INVALID',
+      );
+    const localName = data
+      .subarray(localNameStart, localNameEnd)
+      .toString((localFlags & UTF8_FLAG) !== 0 ? 'utf8' : 'latin1');
+    if (localFlags !== flags || localMethod !== method || localName !== rawName)
+      throw new PackageError(
+        `Local and central ZIP headers disagree for ${safePath}.`,
+        'ZIP_INVALID',
+      );
+    const usesDataDescriptor = (flags & 0x0008) !== 0;
+    if (
+      !usesDataDescriptor &&
+      (localCrc !== expectedCrc ||
+        localCompressedSize !== compressedSize ||
+        localUncompressedSize !== uncompressedSize)
+    )
+      throw new PackageError(
+        `Local and central ZIP sizes or checksum disagree for ${safePath}.`,
+        'ZIP_INVALID',
+      );
+    const payloadStart = localNameEnd + localExtraLength;
     const payloadEnd = payloadStart + compressedSize;
     if (payloadEnd > data.length)
       throw new PackageError(
@@ -250,8 +316,20 @@ export async function readZip(
         'ZIP_INVALID',
       );
     const compressed = data.subarray(payloadStart, payloadEnd);
-    const payload =
-      method === 8 ? inflateRawSync(compressed) : Buffer.from(compressed);
+    let payload: Buffer;
+    try {
+      payload =
+        method === 8
+          ? inflateRawSync(compressed, {
+              maxOutputLength: Math.max(1, uncompressedSize),
+            })
+          : Buffer.from(compressed);
+    } catch (error) {
+      throw new PackageError(
+        `Cannot expand ZIP payload for ${safePath}: ${(error as Error).message}`,
+        'ZIP_INTEGRITY',
+      );
+    }
     if (payload.length !== uncompressedSize || crc32(payload) !== expectedCrc) {
       throw new PackageError(
         `ZIP integrity check failed for ${safePath}.`,
@@ -273,7 +351,12 @@ export async function readZip(
       mtime: dosToDate(modifiedTime, modifiedDate),
       isDirectory,
     });
-    cursor = nameEnd + extraLength + commentLength;
+    cursor = centralEntryEnd;
   }
+  if (cursor !== centralEnd)
+    throw new PackageError(
+      'ZIP central directory size does not match its entries.',
+      'ZIP_INVALID',
+    );
   return entries;
 }

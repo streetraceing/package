@@ -15,7 +15,8 @@ Usage:
   package list [archive.zip] [--json]
   package projects [--json]
   package workspaces [selector] [--json]
-  package init [--force]
+  package config [--json]
+  package init [--force] [--full]
 
 The archive-first form is also supported:
   package update.zip diff
@@ -43,6 +44,15 @@ Core options:
   --compression-level <0-9>   ZIP compression level
   --json                      Machine-readable output
   -q, --quiet                 Reduce output
+
+Initialization:
+  package init                Create a concise starter .packagerc
+  package init --full         Create an expanded config with every option
+  package config              Show the effective config, including defaults
+  package config --json       Print the complete effective config as JSON
+
+The concise config keeps only the schema, archive name, strategy, and gitignore
+choice. Omitted settings continue to use the documented safe defaults.
 
 
 Project composition:
@@ -113,6 +123,7 @@ Examples:
   package zip
   package zip ./my-project --output release.zip
   package projects
+  package config
   package workspaces
   package zip --workspace @acme/api --with-dependencies
   package zip --all-workspaces --no-root-files

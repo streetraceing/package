@@ -5,11 +5,15 @@ import { loadPackage } from '../manifest/load.js';
 import { collectConfiguredProjects } from '../projects/collect.js';
 import { createManifest } from '../manifest/create.js';
 import { writeZip } from '../archive/zip.js';
+import {
+  manifestArchiveEntry,
+  payloadArchiveEntries,
+  shiftArchiveEntry,
+} from '../archive/entries.js';
 import { renderShift } from '../shift/render.js';
 import { sha256File } from '../util/hash.js';
 import { calculateShift } from '../shift/calculate.js';
 import { PackageError } from '../errors.js';
-import { packageManifestPath, packageShiftPath } from '../archive/metadata.js';
 import { runProjectHookTargets } from '../util/hooks.js';
 import {
   DeletedCacheSession,
@@ -123,22 +127,9 @@ export async function createShiftArchive(
     name: path.basename(resolvedBaseArchive),
     sha256: await sha256File(resolvedBaseArchive),
   };
-  const entries: ArchiveEntry[] = manifest.files.map((file) => ({
-    path: file.path,
-    data: data.get(file.path) as Buffer,
-    mode: file.mode,
-    mtime: file.mtime ? new Date(file.mtime) : undefined,
-  }));
-  entries.push({
-    path: packageShiftPath,
-    data: Buffer.from(renderShift(instructions), 'utf8'),
-    mode: 0o644,
-  });
-  entries.push({
-    path: packageManifestPath,
-    data: Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, 'utf8'),
-    mode: 0o644,
-  });
+  const entries: ArchiveEntry[] = payloadArchiveEntries(manifest, data);
+  entries.push(shiftArchiveEntry(renderShift(instructions)));
+  entries.push(manifestArchiveEntry(manifest));
   const deletedCache = config.saveDeletedCache
     ? new DeletedCacheSession(config.root, 'shift', outputPath)
     : undefined;

@@ -15,6 +15,7 @@ export interface ParsedArgs {
   dryRun: boolean;
   yes: boolean;
   force: boolean;
+  initFull: boolean;
   allowProjectMismatch: boolean;
   rewriteAll: boolean;
   backup?: boolean;
@@ -30,7 +31,7 @@ export interface ParsedArgs {
   monorepoOverrides: Partial<MonorepoConfig>;
 }
 
-const commands = new Set([
+export const commands = new Set([
   'zip',
   'shift',
   'diff',
@@ -39,6 +40,7 @@ const commands = new Set([
   'check',
   'list',
   'init',
+  'config',
   'help',
   'version',
   'backup',
@@ -48,6 +50,19 @@ const commands = new Set([
   'projects',
 ]);
 
+function valueOption(
+  arg: string,
+  longName: string,
+  shortName?: string,
+): boolean {
+  return (
+    arg === longName ||
+    arg.startsWith(`${longName}=`) ||
+    (shortName !== undefined &&
+      (arg === shortName || arg.startsWith(`${shortName}=`)))
+  );
+}
+
 function takeValue(
   argv: string[],
   index: number,
@@ -55,16 +70,64 @@ function takeValue(
 ): { value: string; next: number } {
   const current = argv[index] ?? '';
   const equals = current.indexOf('=');
-  if (equals !== -1) return { value: current.slice(equals + 1), next: index };
+  if (equals !== -1) {
+    const value = current.slice(equals + 1);
+    if (value.length === 0)
+      throw new PackageError(`${flag} requires a value.`, 'CLI_ARGUMENT');
+    return { value, next: index };
+  }
+
   const value = argv[index + 1];
-  if (!value || value.startsWith('--'))
+  if (value === undefined || value.startsWith('-'))
     throw new PackageError(`${flag} requires a value.`, 'CLI_ARGUMENT');
   return { value, next: index + 1 };
 }
 
-export function parseArgs(argv: string[]): ParsedArgs {
-  const rawPositionals: string[] = [];
-  const parsed: ParsedArgs = {
+function appendOverride<
+  K extends 'ignore' | 'include' | 'forceIgnore' | 'forceInclude',
+>(parsed: ParsedArgs, key: K, value: string): void {
+  parsed.configOverrides[key] = [
+    ...(parsed.configOverrides[key] ?? []),
+    value,
+  ] as PackageConfig[K];
+}
+
+function editDistance(left: string, right: string): number {
+  const previous = Array.from(
+    { length: right.length + 1 },
+    (_, index) => index,
+  );
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const current = [leftIndex];
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const cost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1;
+      current[rightIndex] = Math.min(
+        (current[rightIndex - 1] ?? 0) + 1,
+        (previous[rightIndex] ?? 0) + 1,
+        (previous[rightIndex - 1] ?? 0) + cost,
+      );
+    }
+    previous.splice(0, previous.length, ...current);
+  }
+  return previous[right.length] ?? Math.max(left.length, right.length);
+}
+
+function unknownCommand(command: string): PackageError {
+  const suggestion = [...commands]
+    .map((candidate) => ({
+      candidate,
+      distance: editDistance(command, candidate),
+    }))
+    .sort((left, right) => left.distance - right.distance)[0];
+  const hint =
+    suggestion && suggestion.distance <= 3
+      ? ` Did you mean ${suggestion.candidate}?`
+      : '';
+  return new PackageError(`Unknown command: ${command}.${hint}`, 'CLI_COMMAND');
+}
+
+function createParsedArgs(): ParsedArgs {
+  return {
     command: 'help',
     positionals: [],
     cwd: process.cwd(),
@@ -72,6 +135,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     dryRun: false,
     yes: false,
     force: false,
+    initFull: false,
     allowProjectMismatch: false,
     rewriteAll: false,
     quiet: false,
@@ -80,6 +144,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
     allWorkspaces: false,
     monorepoOverrides: {},
   };
+}
+
+export function parseArgs(argv: string[]): ParsedArgs {
+  const rawPositionals: string[] = [];
+  const parsed = createParsedArgs();
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index] ?? '';
@@ -91,6 +160,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       rawPositionals.push(arg);
       continue;
     }
+
     if (arg === '--help' || arg === '-h') rawPositionals.unshift('help');
     else if (arg === '--version' || arg === '-v')
       rawPositionals.unshift('version');
@@ -98,6 +168,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
     else if (arg === '--dry-run') parsed.dryRun = true;
     else if (arg === '--yes' || arg === '-y') parsed.yes = true;
     else if (arg === '--force' || arg === '-f') parsed.force = true;
+    else if (arg === '--full') parsed.initFull = true;
+    else if (arg === '--minimal') parsed.initFull = false;
     else if (arg === '--allow-project-mismatch')
       parsed.allowProjectMismatch = true;
     else if (arg === '--rewrite-all') parsed.rewriteAll = true;
@@ -145,34 +217,34 @@ export function parseArgs(argv: string[]): ParsedArgs {
       parsed.configOverrides.followSymlinks = true;
     else if (arg === '--no-follow-symlinks')
       parsed.configOverrides.followSymlinks = false;
-    else if (arg.startsWith('--workspace-pattern')) {
+    else if (valueOption(arg, '--workspace-pattern')) {
       const result = takeValue(argv, index, '--workspace-pattern');
       parsed.monorepoOverrides.workspacePatterns = [
         ...(parsed.monorepoOverrides.workspacePatterns ?? []),
         result.value,
       ];
       index = result.next;
-    } else if (arg.startsWith('--workspace') || arg === '-w') {
+    } else if (valueOption(arg, '--workspace', '-w')) {
       const result = takeValue(argv, index, '--workspace');
       parsed.workspaceSelectors.push(result.value);
       index = result.next;
-    } else if (arg.startsWith('--cwd')) {
+    } else if (valueOption(arg, '--cwd')) {
       const result = takeValue(argv, index, '--cwd');
       parsed.cwd = result.value;
       index = result.next;
-    } else if (arg.startsWith('--config')) {
+    } else if (valueOption(arg, '--config')) {
       const result = takeValue(argv, index, '--config');
       parsed.configPath = result.value;
       index = result.next;
-    } else if (arg.startsWith('--output') || arg === '-o') {
+    } else if (valueOption(arg, '--output', '-o')) {
       const result = takeValue(argv, index, '--output');
       parsed.output = result.value;
       index = result.next;
-    } else if (arg.startsWith('--message')) {
+    } else if (valueOption(arg, '--message')) {
       const result = takeValue(argv, index, '--message');
       parsed.message = result.value;
       index = result.next;
-    } else if (arg.startsWith('--strategy')) {
+    } else if (valueOption(arg, '--strategy')) {
       const result = takeValue(argv, index, '--strategy');
       if (result.value !== 'git' && result.value !== 'walk')
         throw new PackageError(
@@ -181,58 +253,51 @@ export function parseArgs(argv: string[]): ParsedArgs {
         );
       parsed.configOverrides.strategy = result.value;
       index = result.next;
-    } else if (arg.startsWith('--package-manager-ignore-file')) {
+    } else if (valueOption(arg, '--package-manager-ignore-file')) {
       const result = takeValue(argv, index, '--package-manager-ignore-file');
       parsed.configOverrides.packageManagerIgnoreFile = result.value;
       index = result.next;
-    } else if (arg.startsWith('--package-manager')) {
+    } else if (valueOption(arg, '--package-manager')) {
       const result = takeValue(argv, index, '--package-manager');
       parsed.configOverrides.packageManager = result.value;
       index = result.next;
-    } else if (arg.startsWith('--ignore')) {
+    } else if (valueOption(arg, '--ignore')) {
       const result = takeValue(argv, index, '--ignore');
-      parsed.configOverrides.ignore = [
-        ...(parsed.configOverrides.ignore ?? []),
-        result.value,
-      ];
+      appendOverride(parsed, 'ignore', result.value);
       index = result.next;
-    } else if (arg.startsWith('--include')) {
+    } else if (valueOption(arg, '--include')) {
       const result = takeValue(argv, index, '--include');
-      parsed.configOverrides.include = [
-        ...(parsed.configOverrides.include ?? []),
-        result.value,
-      ];
+      appendOverride(parsed, 'include', result.value);
       index = result.next;
-    } else if (arg.startsWith('--force-ignore')) {
+    } else if (valueOption(arg, '--force-ignore')) {
       const result = takeValue(argv, index, '--force-ignore');
-      parsed.configOverrides.forceIgnore = [
-        ...(parsed.configOverrides.forceIgnore ?? []),
-        result.value,
-      ];
+      appendOverride(parsed, 'forceIgnore', result.value);
       index = result.next;
-    } else if (arg.startsWith('--force-include')) {
+    } else if (valueOption(arg, '--force-include')) {
       const result = takeValue(argv, index, '--force-include');
-      parsed.configOverrides.forceInclude = [
-        ...(parsed.configOverrides.forceInclude ?? []),
-        result.value,
-      ];
+      appendOverride(parsed, 'forceInclude', result.value);
       index = result.next;
-    } else if (arg.startsWith('--compression-level')) {
+    } else if (valueOption(arg, '--compression-level')) {
       const result = takeValue(argv, index, '--compression-level');
-      parsed.configOverrides.compressionLevel = Number(result.value);
+      const level = Number(result.value);
+      if (!Number.isInteger(level) || level < 0 || level > 9)
+        throw new PackageError(
+          '--compression-level must be an integer from 0 to 9.',
+          'CLI_ARGUMENT',
+        );
+      parsed.configOverrides.compressionLevel = level;
       index = result.next;
-    } else if (arg.startsWith('--conflict')) {
+    } else if (valueOption(arg, '--conflict')) {
       const result = takeValue(argv, index, '--conflict');
       if (
         result.value !== 'abort' &&
         result.value !== 'overwrite' &&
         result.value !== 'skip'
-      ) {
+      )
         throw new PackageError(
           '--conflict must be abort, overwrite, or skip.',
           'CLI_ARGUMENT',
         );
-      }
       parsed.conflictStrategy = result.value;
       index = result.next;
     } else {
@@ -250,7 +315,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     parsed.command = second;
     parsed.positionals = [first, ...rawPositionals.slice(2)];
   } else {
-    throw new PackageError(`Unknown command: ${first}`, 'CLI_COMMAND');
+    throw unknownCommand(first);
   }
   return parsed;
 }

@@ -6,6 +6,9 @@ of a project.
 
 ## Recent updates
 
+- `package init` now creates a concise starter configuration; use
+  `package config --json` to inspect resolved defaults or `package init --full`
+  for the expanded template.
 - Related local projects can be composed explicitly with project-local
   `depends_on` declarations. Every project keeps its own file rules and hooks.
 - Workspace auto-discovery remains available as a legacy scoping workflow.
@@ -68,6 +71,29 @@ not bypass it. For an intentional automated cross-project apply, review with
 `--dry-run` and pass `--allow-project-mismatch` explicitly.
 
 Run `npx @streetraceing/package --help` for the complete command reference.
+
+## Start a configuration
+
+Create the small configuration most projects need:
+
+```bash
+package init
+```
+
+The generated `.packagerc` contains the schema URL, archive name, collection
+strategy, and Git-ignore choice. Other settings remain active through validated
+defaults rather than being copied into every new project. Inspect them at any
+time:
+
+```bash
+package config
+package config --json
+```
+
+Use `package init --full` for an expanded reference template,
+`package init --force` to intentionally replace an existing config, and
+`package init --no-gitignore` to skip both Git-ignore selection and the generated
+`*.zip` block.
 
 ## Project composition with `depends_on`
 
@@ -143,6 +169,8 @@ A dependency may also use the short form:
 Its name is inferred from `package.json`, then from the directory name. Run
 `apply` from the entry project; Package automatically targets the shared root, so
 both sibling directories are updated while entry-level apply policy is preserved.
+Each dependency path is relative to the `.packagerc` that declares it, even when
+that configuration sets a different project `root`.
 
 ## Legacy monorepo workspace scoping
 

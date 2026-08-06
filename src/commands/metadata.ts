@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { access, writeFile } from 'node:fs/promises';
+import { access } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import type {
   PackageConfig,
@@ -13,6 +13,7 @@ import { calculateShift } from '../shift/calculate.js';
 import { renderShift } from '../shift/render.js';
 import { sha256File } from '../util/hash.js';
 import { PackageError } from '../errors.js';
+import { writeFileAtomic } from '../util/fs.js';
 import {
   packageManifestPath,
   packageShiftPath,
@@ -205,12 +206,12 @@ export async function metadataCommand(
     );
   }
 
-  await writeFile(
+  await writeFileAtomic(
     manifestTarget,
     `${JSON.stringify(manifest, null, 2)}\n`,
     'utf8',
   );
-  await writeFile(shiftTarget, renderShift(instructions), 'utf8');
+  await writeFileAtomic(shiftTarget, renderShift(instructions), 'utf8');
   reportDeletedCache(deletedCache, options.quiet);
 
   if (options.quiet) return;

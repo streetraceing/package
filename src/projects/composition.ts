@@ -1,7 +1,12 @@
 import path from 'node:path';
 import { access, lstat, readFile, realpath } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { loadConfig, resolveConfigPaths } from '../config.js';
+import {
+  configDirectoryOf,
+  configPathOf,
+  loadConfig,
+  resolveConfigPaths,
+} from '../config.js';
 import { PackageError } from '../errors.js';
 import type {
   ManifestComposition,
@@ -133,10 +138,14 @@ async function dependencyProject(
   declaredName?: string,
 ): Promise<ProjectDraft> {
   const configDirectory = await canonicalDirectory(
-    path.resolve(parent.root, dependencyPath),
+    path.resolve(parent.configDirectory, dependencyPath),
   );
   const loaded = await loadConfig(configDirectory);
-  const config = resolveConfigPaths(loaded.config, configDirectory);
+  const config = resolveConfigPaths(
+    loaded.config,
+    loaded.configDirectory,
+    loaded.configPath,
+  );
   const root = await canonicalDirectory(config.root);
   const discovered = await packageName(root);
   return {
@@ -151,9 +160,10 @@ async function dependencyProject(
 
 async function entryProject(config: PackageConfig): Promise<ProjectDraft> {
   const root = await canonicalDirectory(config.root);
-  const configDirectory = root;
+  const configDirectory = configDirectoryOf(config);
   const discovered = await packageName(root);
-  const configPath = await localConfigPath(configDirectory);
+  const configPath =
+    configPathOf(config) ?? (await localConfigPath(configDirectory));
   return {
     name: inferredName(root, discovered),
     root,
@@ -369,7 +379,11 @@ export async function resolveCompositionAtTarget(
     ...(entry.path === '.' ? [] : normalizeRelativePath(entry.path).split('/')),
   );
   const loaded = await loadConfig(entryDirectory);
-  const config = resolveConfigPaths(loaded.config, entryDirectory);
+  const config = resolveConfigPaths(
+    loaded.config,
+    loaded.configDirectory,
+    loaded.configPath,
+  );
   const composition = await resolveProjectComposition(config);
   if (!composition || !compositionMatchesManifest(composition, manifest)) {
     throw new PackageError(

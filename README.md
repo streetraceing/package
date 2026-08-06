@@ -169,7 +169,9 @@ A short path form is also accepted:
 ```
 
 The name then comes from the dependent project's `package.json`, falling back to
-its directory name.
+its directory name. Dependency paths are resolved relative to the `.packagerc`
+that declares them, not relative to its optional `root` value. This keeps custom
+config layouts predictable, including `package --config configs/website.json`.
 
 ## Legacy monorepo workspace scoping
 
@@ -246,11 +248,22 @@ A strict configuration example:
 
 ## Configuration and package format
 
-Run `package init` to generate a strict-JSON `.packagerc` file with schema
-support. The command also creates or updates `.gitignore` with a generated
-`*.zip` rule, without duplicating the block on later forced initialization. By default, Package uses Git file selection when it is available;
-otherwise it uses its built-in ignore-aware walker. Git metadata, dependencies,
-previous package metadata, and backup directories are always excluded.
+Run `package init` to generate a concise strict-JSON `.packagerc` with only the
+settings normally needed to start: schema, archive name, collection strategy,
+and Git-ignore behavior. Omitted settings continue to use validated defaults.
+Use `package config` to inspect the effective configuration or
+`package config --json` to see every resolved value. Use `package init --full`
+only when an expanded template is useful.
+
+The init command also creates or updates `.gitignore` with a generated `*.zip`
+rule, without duplicating the block on later forced initialization. Pass
+`--no-gitignore` when neither Git-ignore selection nor the generated ignore rule
+is wanted. Existing configuration is never overwritten without `--force`, and
+forced replacement participates in the deleted-file cache.
+
+By default, Package uses Git file selection when it is available; otherwise it
+uses its built-in ignore-aware walker. Git metadata, dependencies, previous
+package metadata, and backup directories are always excluded.
 
 Use `forceInclude` and `forceIgnore` for paths that must override the normal
 selection rules. They take precedence over `include`, `ignore`, dotfile filtering,

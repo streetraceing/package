@@ -112,6 +112,7 @@ async function collectForceIncludedFiles(
   async function walk(
     directory: string,
     relativeDirectory: string,
+    ancestors: ReadonlySet<string>,
   ): Promise<void> {
     const entries = await readdir(directory, { withFileTypes: true });
     entries.sort((left, right) => left.name.localeCompare(right.name));
@@ -134,8 +135,15 @@ async function collectForceIncludedFiles(
           );
         }
         const stat = await lstat(resolved);
-        if (stat.isDirectory()) await walk(resolved, relativePath);
-        else if (
+        if (stat.isDirectory()) {
+          if (ancestors.has(resolved)) {
+            throw new PackageError(
+              `Symbolic link creates a directory cycle: ${relativePath}`,
+              'SYMLINK_CYCLE',
+            );
+          }
+          await walk(resolved, relativePath, new Set([...ancestors, resolved]));
+        } else if (
           stat.isFile() &&
           matchesAny(relativePath, config.forceInclude)
         ) {
@@ -148,7 +156,7 @@ async function collectForceIncludedFiles(
           });
         }
       } else if (entry.isDirectory()) {
-        await walk(absolutePath, relativePath);
+        await walk(absolutePath, relativePath, ancestors);
       } else if (
         entry.isFile() &&
         matchesAny(relativePath, config.forceInclude)
@@ -165,7 +173,8 @@ async function collectForceIncludedFiles(
     }
   }
 
-  await walk(config.root, '');
+  const rootRealPath = await realpath(config.root);
+  await walk(config.root, '', new Set([rootRealPath]));
   return files;
 }
 
@@ -245,6 +254,7 @@ async function collectWithWalk(
     directory: string,
     relativeDirectory: string,
     inheritedRules: IgnoreRule[],
+    ancestors: ReadonlySet<string>,
   ): Promise<void> {
     const localRules = [
       ...inheritedRules,
@@ -279,8 +289,20 @@ async function collectWithWalk(
           );
         }
         const stat = await lstat(resolved);
-        if (stat.isDirectory()) await walk(resolved, relativePath, localRules);
-        else if (
+        if (stat.isDirectory()) {
+          if (ancestors.has(resolved)) {
+            throw new PackageError(
+              `Symbolic link creates a directory cycle: ${relativePath}`,
+              'SYMLINK_CYCLE',
+            );
+          }
+          await walk(
+            resolved,
+            relativePath,
+            localRules,
+            new Set([...ancestors, resolved]),
+          );
+        } else if (
           stat.isFile() &&
           passesPatterns(relativePath, config, outputArchive, workspaceScope)
         ) {
@@ -293,7 +315,7 @@ async function collectWithWalk(
           });
         }
       } else if (entry.isDirectory()) {
-        await walk(absolutePath, relativePath, localRules);
+        await walk(absolutePath, relativePath, localRules, ancestors);
       } else if (
         entry.isFile() &&
         passesPatterns(relativePath, config, outputArchive, workspaceScope)
@@ -310,7 +332,8 @@ async function collectWithWalk(
     }
   }
 
-  await walk(config.root, '', []);
+  const rootRealPath = await realpath(config.root);
+  await walk(config.root, '', [], new Set([rootRealPath]));
   return files;
 }
 

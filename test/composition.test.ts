@@ -44,7 +44,11 @@ function projectConfig(
 
 async function loadResolvedConfig(root: string) {
   const loaded = await loadConfig(root);
-  return resolveConfigPaths(loaded.config, root);
+  return resolveConfigPaths(
+    loaded.config,
+    loaded.configDirectory,
+    loaded.configPath,
+  );
 }
 
 test('depends_on composes sibling projects with local configs and project-local apply hooks', async () => {
@@ -228,6 +232,54 @@ test('depends_on accepts path shorthand and object entries', async () => {
       { path: '../backend' },
       { path: '../worker', name: '@codeissue/worker' },
     ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('depends_on paths are relative to the declaring config file', async () => {
+  const root = await mkdtemp(
+    path.join(tmpdir(), 'package-composition-config-base-'),
+  );
+  try {
+    await write(root, 'website/package.json', '{"name":"website"}\n');
+    await write(root, 'backend/package.json', '{"name":"backend"}\n');
+    await write(
+      root,
+      'configs/website.packagerc',
+      JSON.stringify(
+        {
+          root: '../website',
+          strategy: 'walk',
+          gitignore: false,
+          depends_on: ['../backend'],
+        },
+        null,
+        2,
+      ),
+    );
+    const loaded = await loadConfig(
+      path.join(root, 'website'),
+      '../configs/website.packagerc',
+    );
+    const config = resolveConfigPaths(
+      loaded.config,
+      loaded.configDirectory,
+      loaded.configPath,
+    );
+    const composition = await resolveProjectComposition(config);
+    assert.equal(composition?.root, root);
+    assert.deepEqual(
+      composition?.projects.map((project) => [
+        project.name,
+        project.archivePath,
+        project.configPath,
+      ]),
+      [
+        ['backend', 'backend', undefined],
+        ['website', 'website', 'configs/website.packagerc'],
+      ],
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

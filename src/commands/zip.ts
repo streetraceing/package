@@ -5,6 +5,10 @@ import { collectConfiguredProjects } from '../projects/collect.js';
 import { findSensitiveFiles } from '../files/sensitive.js';
 import { createManifest } from '../manifest/create.js';
 import { writeZip } from '../archive/zip.js';
+import {
+  manifestArchiveEntry,
+  payloadArchiveEntries,
+} from '../archive/entries.js';
 import { PackageError } from '../errors.js';
 import { parseShift } from '../shift/parser.js';
 import { resolveInside } from '../util/path.js';
@@ -191,27 +195,8 @@ export async function createSnapshot(
     workspaceScope,
     composition,
   );
-  const entries: ArchiveEntry[] = [];
-  for (const file of manifest.files) {
-    const content = data.get(file.path);
-    if (!content)
-      throw new PackageError(
-        `Cannot read collected file: ${file.path}`,
-        'FILE_READ_ERROR',
-      );
-    entries.push({
-      path: file.path,
-      data: content,
-      mode: file.mode,
-      mtime: file.mtime ? new Date(file.mtime) : undefined,
-    });
-  }
-  entries.push({
-    path: packageManifestPath,
-    data: Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, 'utf8'),
-    mode: 0o644,
-    compression: 'deflate',
-  });
+  const entries: ArchiveEntry[] = payloadArchiveEntries(manifest, data);
+  entries.push(manifestArchiveEntry(manifest));
   const shiftEntry = await readConfiguredShiftEntry(config);
   if (shiftEntry) entries.push(shiftEntry);
   const deletedCache = config.saveDeletedCache
