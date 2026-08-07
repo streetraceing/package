@@ -38,6 +38,7 @@ export const symbol = {
   separator: '│',
   arrow: '→',
   hook: '↳',
+  project: '▸',
   add: '+',
   modify: '~',
   remove: '−',
@@ -159,6 +160,14 @@ export function warning(message: string): void {
 export function errorMessage(message: string): string {
   const branch = decorate(symbol.branch, ansi.muted, 'stderr');
   return `${branch} ${statusGlyph('error', 'stderr')} ${color.error('package')}${color.error(':')} ${color.error(message)}`;
+}
+
+export function projectHookHeader(name: string, projectPath: string): string {
+  const pathPart =
+    projectPath === '.'
+      ? ''
+      : ` ${color.muted(`${symbol.separator} ${projectPath}`)}`;
+  return `${color.muted(symbol.branch)} ${color.magenta(symbol.project)} ${color.cyan(name)}${pathPart} ${color.muted('─'.repeat(12))}`;
 }
 
 export function formatBytes(bytes: number): string {

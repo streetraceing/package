@@ -44,6 +44,7 @@ import {
 interface ApplyContext {
   archivePath: string;
   projectRoot: string;
+  projectRoots: string[];
   composition?: ProjectComposition;
 }
 
@@ -255,6 +256,9 @@ export async function applyCommand(
   const context: ApplyContext = {
     archivePath: archiveAbsolutePath,
     projectRoot: composition?.root ?? path.resolve(options.cwd),
+    projectRoots: composition
+      ? composition.projects.map((project) => project.root)
+      : [path.resolve(options.cwd)],
     ...(composition ? { composition } : {}),
   };
   const effectiveOptions: ApplyOptions = {

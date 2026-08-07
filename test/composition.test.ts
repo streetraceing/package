@@ -1,7 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  copyFile,
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { loadConfig, resolveConfigPaths } from '../src/config.js';
 import { createSnapshot } from '../src/commands/zip.js';
@@ -182,6 +190,81 @@ test('depends_on composes sibling projects with local configs and project-local 
       ),
       path.join(target, 'backend'),
     );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test('depends_on source cleanup finds an entry snapshot when the update archive is applied from the composition root', async () => {
+  const workspace = await mkdtemp(
+    path.join(tmpdir(), 'package-composition-cleanup-'),
+  );
+  const source = path.join(workspace, 'source', 'codeissue');
+  const target = path.join(workspace, 'target', 'codeissue');
+  try {
+    await write(
+      source,
+      'website/package.json',
+      '{"name":"@codeissue/website","private":true}\n',
+    );
+    await write(
+      source,
+      'backend/package.json',
+      '{"name":"@codeissue/backend","private":true}\n',
+    );
+    await write(
+      source,
+      'website/.packagerc',
+      projectConfig(
+        [{ path: '../backend', name: '@codeissue/backend' }],
+        'website-after-apply.txt',
+      ),
+    );
+    await write(
+      source,
+      'backend/.packagerc',
+      projectConfig([], 'backend-after-apply.txt'),
+    );
+    await write(source, 'website/src/page.ts', 'export const page = 1;\n');
+    await write(source, 'backend/src/api.ts', 'export const api = 1;\n');
+    await cp(source, target, { recursive: true });
+
+    const config = await loadResolvedConfig(path.join(source, 'website'));
+    const baseArchive = await createSnapshot(config, {
+      output: 'base.zip',
+      quiet: true,
+    });
+    const targetBaseArchive = path.join(target, 'website', 'base.zip');
+    await copyFile(baseArchive, targetBaseArchive);
+
+    await write(source, 'website/src/page.ts', 'export const page = 2;\n');
+    await write(source, 'backend/src/api.ts', 'export const api = 2;\n');
+    const updateArchive = await createShiftArchive('base.zip', config, {
+      output: '../update.zip',
+      quiet: true,
+    });
+    const targetUpdateArchive = path.join(target, 'update.zip');
+    await copyFile(updateArchive, targetUpdateArchive);
+
+    const targetConfig = await loadResolvedConfig(path.join(target, 'website'));
+    const targetComposition = await resolveProjectComposition(targetConfig);
+    assert.ok(targetComposition);
+
+    await applyCommand(targetUpdateArchive, {
+      cwd: targetConfig.root,
+      composition: targetComposition,
+      dryRun: false,
+      yes: true,
+      force: false,
+      backup: false,
+      conflictStrategy: 'abort',
+      saveDeletedCache: false,
+      deletePackageOnApply: false,
+      deleteSourcePackageOnApply: true,
+    });
+
+    await assert.rejects(readFile(targetBaseArchive), /ENOENT/);
+    assert.ok((await readFile(targetUpdateArchive)).length > 0);
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }

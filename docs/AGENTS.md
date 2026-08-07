@@ -645,7 +645,8 @@ Execution rules:
 - commands run sequentially;
 - in a single project, the working directory is that project root;
 - in a `depends_on` composition, hooks run dependency-first and each command's
-  working directory is the project that declared it;
+  working directory is the project that declared it; project hook output is grouped
+  under a `├─ ▸ project │ path ───` separator;
 - `beforePackage` and `afterPackage` wrap `zip` and `shift`;
 - `beforeApply` runs after validation and confirmation, before writes;
 - `afterApply` runs after successful writes;
@@ -698,7 +699,8 @@ SHA-256 stored in the patch manifest.
 It searches:
 
 1. beside the applied update archive;
-2. in the target project root.
+2. in the composition/target root;
+3. in every participating project root for a `depends_on` composition.
 
 If explicit source metadata is unavailable, it may safely identify exactly one
 snapshot whose manifest matches the project state before apply. Ambiguous,

@@ -237,14 +237,19 @@ alias.
 - `deletePackageOnApply` removes the applied archive after project changes are
   written, even if an `afterApply` command fails. It is `false` by default.
 - `deleteSourcePackageOnApply` removes one safely identified source snapshot. It
-  first uses the exact filename and SHA-256 recorded by `package shift`; when that
-  reference is unavailable, it accepts exactly one snapshot beside the update
-  archive or in the project root whose manifest matches the project state before
-  apply. Ambiguous or changed archives are preserved. It is `false` by default.
+  first uses the exact filename and SHA-256 recorded by `package shift`, searching
+  beside the update archive, in the composition root, and in every participating
+  project root. If that reference is unavailable, the same locations are searched
+  for exactly one snapshot whose manifest matches the project state before apply.
+  This covers the common case where the update ZIP is stored at the shared root
+  while the source snapshot remains in the entry project. Ambiguous or changed
+  archives are preserved. It is `false` by default.
 
 For one project, hook commands run sequentially from its root. In a
 `depends_on` composition, they run dependency-first from each owning project's
-root. Hook processes receive `PACKAGE_HOOK`, `PACKAGE_COMMAND`, `PACKAGE_ROOT`,
+root. Each project hook block is introduced by a `├─ ▸ project │ path ───`
+separator so output stays visually grouped. Hook processes receive `PACKAGE_HOOK`,
+`PACKAGE_COMMAND`, `PACKAGE_ROOT`,
 `PACKAGE_ARCHIVE`, `PACKAGE_MANAGER`, `PACKAGE_PROJECT_NAME`,
 `PACKAGE_PROJECT_PATH`, and `PACKAGE_COMPOSITION_ROOT`.
 

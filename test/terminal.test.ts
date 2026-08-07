@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { formatChanges } from '../src/commands/diff.js';
-import { statusLine, symbol } from '../src/util/terminal.js';
+import { projectHookHeader, statusLine, symbol } from '../src/util/terminal.js';
 
 test('terminal status lines keep neutral tree connectors and semantic glyphs', () => {
   const previous = process.env.NO_COLOR;
@@ -30,6 +30,24 @@ test('change summaries remain branches until the divider terminates the tree', (
     assert.equal(
       output,
       '├─ + ADD      src/index.ts\n├─ 1 change │ 1 add\n└─────────────────────────────────────────',
+    );
+  } finally {
+    if (previous === undefined) delete process.env.NO_COLOR;
+    else process.env.NO_COLOR = previous;
+  }
+});
+
+test('project hook headers visually separate depends_on lifecycle scripts', () => {
+  const previous = process.env.NO_COLOR;
+  process.env.NO_COLOR = '1';
+  try {
+    assert.equal(
+      projectHookHeader('@codeissue/backend', 'backend'),
+      '├─ ▸ @codeissue/backend │ backend ────────────',
+    );
+    assert.equal(
+      projectHookHeader('@codeissue/website', 'website'),
+      '├─ ▸ @codeissue/website │ website ────────────',
     );
   } finally {
     if (previous === undefined) delete process.env.NO_COLOR;

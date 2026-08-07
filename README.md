@@ -330,7 +330,9 @@ runs after validation and confirmation but before files are changed. `afterApply
 runs after a successful apply as a best-effort hook: failed commands produce
 warnings, do not roll back project changes, and do not stop later hooks or archive
 cleanup. For a single project, hooks run sequentially from its root. With `depends_on`,
-hooks run dependency-first from each owning project's root. They receive
+hooks run dependency-first from each owning project's root. The terminal prints a
+`├─ ▸ <project> │ <path> ───` project separator before each project's hook block,
+so command output from sibling projects does not visually run together. They receive
 `PACKAGE_HOOK`, `PACKAGE_COMMAND`, `PACKAGE_ROOT`, `PACKAGE_ARCHIVE`,
 `PACKAGE_MANAGER`, `PACKAGE_PROJECT_NAME`, `PACKAGE_PROJECT_PATH`, and
 `PACKAGE_COMPOSITION_ROOT`.
@@ -339,12 +341,15 @@ is deleted after the project files are applied, even if an `afterApply` command
 reports an error.
 
 `deleteSourcePackageOnApply` also defaults to `false`. Update archives created by
-`package shift` record the source snapshot name and SHA-256. When that metadata
-is unavailable, the CLI safely looks next to the applied archive and in the
-project root for exactly one snapshot whose manifest matches the project state
-before apply. When cleanup is explicitly enabled, Package deletes only an exact
-matching regular file beside the update archive or in the project root; missing
-metadata, hash mismatches, symlinks, and failed or dry-run applies are preserved.
+`package shift` record the source snapshot name and SHA-256. Package searches for
+that exact snapshot next to the applied archive, in the composition root, and in
+every participating project root. If explicit source metadata is unavailable, the
+same locations are used to find exactly one snapshot whose manifest matches the
+project state before apply. This matters when an update ZIP is placed at the shared
+`depends_on` root while the original snapshot remains inside the entry project.
+When cleanup is explicitly enabled, Package deletes only an exact matching regular
+file; hash mismatches, ambiguity, symlinks, and failed or dry-run applies are
+preserved.
 
 ## Deleted-file cache
 

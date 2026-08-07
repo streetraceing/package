@@ -1,6 +1,12 @@
 import { spawn } from 'node:child_process';
 import { PackageError } from '../errors.js';
-import { color, label, symbol, warning } from './terminal.js';
+import {
+  color,
+  label,
+  projectHookHeader,
+  symbol,
+  warning,
+} from './terminal.js';
 
 export type PackageHookName =
   'beforePackage' | 'afterPackage' | 'beforeApply' | 'afterApply';
@@ -25,6 +31,7 @@ export interface PackageHookFailure {
 
 export interface RunPackageHooksOptions {
   failureMode?: HookFailureMode;
+  showProjectName?: boolean;
 }
 
 function packageHookError(
@@ -103,6 +110,7 @@ export async function runPackageHooks(
   options: RunPackageHooksOptions = {},
 ): Promise<PackageHookFailure[]> {
   const failureMode = options.failureMode ?? 'throw';
+  const showProjectName = options.showProjectName ?? true;
   const failures: PackageHookFailure[] = [];
 
   for (const script of scripts) {
@@ -112,9 +120,10 @@ export async function runPackageHooks(
       packageManager,
     );
     if (!context.quiet) {
-      const project = context.projectName
-        ? ` ${color.cyan(`[${context.projectName}]`)}`
-        : '';
+      const project =
+        showProjectName && context.projectName
+          ? ` ${color.cyan(`[${context.projectName}]`)}`
+          : '';
       console.log(
         `${color.muted(symbol.branch)} ${color.magenta(symbol.hook)} ${label(hook)}${project} ${color.bold(resolvedScript)} ${color.muted(`${symbol.arrow} ${context.command}`)}`,
       );
@@ -141,7 +150,11 @@ export async function runProjectHookTargets(
   options: RunPackageHooksOptions = {},
 ): Promise<PackageHookFailure[]> {
   const failures: PackageHookFailure[] = [];
+  const grouped = targets.length > 1;
   for (const target of targets) {
+    if (target.scripts.length === 0) continue;
+    if (grouped && !context.quiet)
+      console.log(projectHookHeader(target.name, target.path));
     const result = await runPackageHooks(
       hook,
       target.scripts,
@@ -155,7 +168,10 @@ export async function runProjectHookTargets(
         projectPath: target.path,
         compositionRoot: context.compositionRoot,
       },
-      options,
+      {
+        ...options,
+        showProjectName: grouped ? false : options.showProjectName,
+      },
     );
     failures.push(...result);
   }

@@ -12,6 +12,8 @@ import type { DeletedCacheSession } from '../util/deleted-cache.js';
 export interface SourcePackageCleanupContext {
   archivePath: string;
   projectRoot: string;
+  /** Project-local roots that may contain the source snapshot. */
+  projectRoots?: readonly string[];
 }
 
 export interface SourcePackageCleanupPlan {
@@ -24,9 +26,11 @@ export interface SourcePackageCleanupPlan {
 function cleanupDirectories(context: SourcePackageCleanupContext): string[] {
   return [
     ...new Set(
-      [path.dirname(context.archivePath), context.projectRoot].map((item) =>
-        path.resolve(item),
-      ),
+      [
+        path.dirname(context.archivePath),
+        context.projectRoot,
+        ...(context.projectRoots ?? []),
+      ].map((item) => path.resolve(item)),
     ),
   ];
 }
